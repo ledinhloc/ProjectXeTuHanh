@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "com.example.projectxetuhanh"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.example.projectxetuhanh"
@@ -50,4 +50,9 @@ dependencies {
 
     implementation(libs.tensorflow.lite.support)
     implementation(libs.usbserial)
+    //camera
+    implementation(libs.camera.core.v130)
+    implementation(libs.camera.camera2.v130)
+    implementation(libs.camera.lifecycle.v130)
+    implementation(libs.camera.view.v130)
 }
