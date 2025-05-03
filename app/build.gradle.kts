@@ -40,4 +40,14 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+
+    implementation(libs.tensorflow.lite) // TensorFlow Lite
+    implementation(libs.usbserial) // Giao tiếp USB
+    implementation(libs.camera.core) // CameraX
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
+
+    implementation(libs.tensorflow.lite.support)
+    implementation(libs.usbserial)
 }
