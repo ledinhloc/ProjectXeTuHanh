@@ -5,19 +5,20 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.AssetFileDescriptor;
 import android.graphics.Bitmap;
-import android.graphics.Rect;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.media.FaceDetector;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.Size;
+import org.opencv.core.Size;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -29,12 +30,28 @@ import androidx.core.view.WindowInsetsCompat;
 import com.felhr.usbserial.UsbSerialDevice;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.ExecutionException;
 import android.Manifest;
+
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfRect;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.objdetect.CascadeClassifier;
+import org.tensorflow.lite.Interpreter;
+import android.graphics.Rect;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -42,6 +59,12 @@ public class MainActivity extends AppCompatActivity {
     private FaceClassifier faceClassifier;
     private PreviewView previewView;
     private ProcessCameraProvider cameraProvider;
+
+    private FaceOverlayView overlayView;
+    private CascadeClassifier faceCascade;
+    private Interpreter tflite;
+    private List<String> labels = new ArrayList<>();
+    private static final float CONFIDENCE_THRESHOLD = 0.7f;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,19 +91,55 @@ public class MainActivity extends AppCompatActivity {
             );
         }
 
-//        // Khởi tạo model TFLite
-//        try {
-//            MappedByteBuffer model = loadModelFile("face_model.tflite");
-//            faceClassifier = new FaceClassifier(model);
-//        } catch (IOException e) {
-//            Log.e("FaceRecognition", "Lỗi tải model", e);
-//        }
-//
-//        // Khởi tạo kết nối USB (tham khảo code trước)
-//        initUSB();
-
         // Khởi động camera
-        startCamera();
+       // startCamera();
+
+        OpenCVLoader.initDebug();
+        loadCascade();
+        loadModel();
+      //  setupCamera();
+    }
+
+    private void loadModel() {
+        try {
+            // Load TFLite model
+            tflite = new Interpreter(loadModelFile("face_model.tflite"));
+            // Load labels
+            InputStream is = getAssets().open("labels.txt");
+            byte[] buffer = new byte[is.available()];
+            is.read(buffer);
+            is.close();
+            String[] labelArray = new String(buffer).split("\n");
+            for (String label : labelArray) labels.add(label.trim());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void loadCascade() {
+        try {
+            InputStream is = getAssets().open("haarcascade_frontalface_default.xml");
+            File cascadeFile = new File(getCacheDir(), "temp.xml");
+            FileOutputStream os = new FileOutputStream(cascadeFile);
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                os.write(buffer, 0, bytesRead);
+            }
+            is.close();
+            os.close();
+            faceCascade = new CascadeClassifier(cascadeFile.getAbsolutePath());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private ByteBuffer loadModelFile(String modelName) throws Exception {
+        try (InputStream is = getAssets().open(modelName)) {
+            byte[] modelData = new byte[is.available()];
+            is.read(modelData);
+            return ByteBuffer.allocateDirect(modelData.length).put(modelData);
+        }
     }
 
     //xu ly sau khi duoc cap quyen
@@ -116,19 +175,79 @@ public class MainActivity extends AppCompatActivity {
                 // Chọn camera sau
                 CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
 
+                ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    imageAnalysis.setAnalyzer(getMainExecutor(), this::processImage);
+                }
                 // Bind các use case
                 cameraProvider.bindToLifecycle(
                         this,
                         cameraSelector,
-                        preview
+                        preview,
+                        imageAnalysis
                 );
 
-            } catch (InterruptedException | ExecutionException e) {
+            } catch (ExecutionException | InterruptedException e) {
                 Log.e("CameraX", "Lỗi khởi tạo camera", e);
             }
         }, ContextCompat.getMainExecutor(this));
     }
 
+    private void processImage(ImageProxy imageProxy) {
+        Mat mat = new Mat();
+        Bitmap bitmap = Bitmap.createBitmap(
+                imageProxy.getWidth(), imageProxy.getHeight(), Bitmap.Config.ARGB_8888);
+        Utils.bitmapToMat(bitmap, mat);
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY);
+
+        // Detect faces
+        MatOfRect faces = new MatOfRect();
+        faceCascade.detectMultiScale(mat, faces, 1.1, 4);
+
+        List<FaceResult> faceResults = new ArrayList<>();
+        for (org.opencv.core.Rect rect : faces.toArray()) {
+            Rect androidRect = new Rect(
+                    rect.x,                 // left
+                    rect.y,                 // top
+                    rect.x + rect.width,    // right
+                    rect.y + rect.height   // bottom
+            );
+            // Preprocess và inference
+            Mat faceMat = new Mat(mat, rect);
+            faceMat = preprocessFace(faceMat);
+            float[][] output = new float[1][labels.size()];
+            tflite.run(convertMatToBuffer(faceMat), output);
+
+            int classId = getMaxClass(output[0]);
+            float confidence = output[0][classId];
+            String label = confidence > CONFIDENCE_THRESHOLD ?
+                    labels.get(classId) : "Unknown";
+
+            faceResults.add(new FaceResult(androidRect, label, confidence));
+        }
+
+        overlayView.setFaces(faceResults, imageProxy.getWidth(), imageProxy.getHeight());
+        imageProxy.close();
+    }
+
+    private Mat preprocessFace(Mat faceMat) {
+        Mat resized = new Mat();
+        Imgproc.resize(faceMat, resized, new Size(100, 100)); // Thay đổi kích thước theo model
+        return resized;
+    }
+
+    private ByteBuffer convertMatToBuffer(Mat mat) {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(mat.rows() * mat.cols() * 1); // Grayscale
+        buffer.order(ByteOrder.nativeOrder());
+        for (int i = 0; i < mat.rows(); i++) {
+            for (int j = 0; j < mat.cols(); j++) {
+                buffer.put((byte) mat.get(i, j)[0]);
+            }
+        }
+        return buffer;
+    }
 
     @Override
     protected void onDestroy() {
@@ -138,83 +257,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-//    private void startCamera() {
-//        ProcessCameraProvider cameraProvider = ...; // Sử dụng CameraX
-//        ImageAnalysis analysis = new ImageAnalysis.Builder()
-//                .setTargetResolution(new Size(640, 480))
-//                .build();
-//
-//        analysis.setAnalyzer(executor, imageProxy -> {
-//            Bitmap bitmap = imageProxy.toBitmap();
-//
-//            // Phát hiện khuôn mặt bằng ML Kit
-//            FaceDetector detector = FaceDetection.getClient();
-//            detector.process(InputImage.fromBitmap(bitmap, imageProxy.getImageInfo().getRotationDegrees()))
-//                    .addOnSuccessListener(faces -> {
-//                        if (!faces.isEmpty()) {
-//                            Rect bounds = faces.get(0).getBoundingBox();
-//                            Bitmap faceCrop = Bitmap.createBitmap(bitmap, bounds.left, bounds.top, bounds.width(), bounds.height());
-//
-//                            // Kiểm tra khuôn mặt
-//                            if (faceClassifier.isMyFace(faceCrop)) {
-//                                float centerX = bounds.centerX();
-//                                sendMovementCommand(centerX, imageProxy.getWidth());
-//                            }
-//                        }
-//                    });
-//            imageProxy.close();
-//        });
-//
-//        cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, analysis);
-//    }
+    private int getMaxClass(float[] output) {
+        int maxIndex = 0;
+        for (int i = 1; i < output.length; i++) {
+            if (output[i] > output[maxIndex]) maxIndex = i;
+        }
+        return maxIndex;
+    }
 
-//    private void sendMovementCommand(float faceX, int imageWidth) {
-//        String cmd;
-//        if (faceX < imageWidth * 0.4) cmd = "L";
-//        else if (faceX > imageWidth * 0.6) cmd = "R";
-//        else cmd = "F";
-//
-//        if (usbDevice != null) {
-//            usbDevice.write(cmd.getBytes());
-//        }
-//    }
-//
-//    // Tải model từ assets
-//    private MappedByteBuffer loadModelFile(String filename) throws IOException {
-//        AssetFileDescriptor fd = getAssets().openFd(filename);
-//        FileInputStream fis = new FileInputStream(fd.getFileDescriptor());
-//        return fis.getChannel().map(FileChannel.MapMode.READ_ONLY, fd.getStartOffset(), fd.getDeclaredLength());
-//    }
-//
-//
-//    private void initUSB() {
-//        UsbManager usbManager = (UsbManager) getSystemService(USB_SERVICE);
-//        UsbDevice arduino = null;
-//
-//        // Tìm thiết bị Arduino qua Vendor ID
-//        for (UsbDevice device : usbManager.getDeviceList().values()) {
-//            if (device.getVendorId() == 0x2341) { // Vendor ID của Arduino
-//                arduino = device;
-//                break;
-//            }
-//        }
-//
-//        if (arduino != null) {
-//            // Tạo PendingIntent đầy đủ tham số
-//            PendingIntent permissionIntent = PendingIntent.getBroadcast(
-//                    this,
-//                    0,
-//                    new Intent(UsbManager.ACTION_USB_PERMISSION),
-//                    PendingIntent.FLAG_MUTABLE // Bắt buộc dùng FLAG_MUTABLE
-//            );
-//            usbManager.requestPermission(arduino, permissionIntent);
-//
-//            // Mở kết nối serial
-//            usbDevice = UsbSerialDevice.createUsbSerialDevice(arduino, usbManager.openDevice(arduino));
-//            if (usbDevice != null) {
-//                usbDevice.open();
-//                usbDevice.setBaudRate(9600); // Cấu hình baud rate
-//            }
-//        }
-//    }
 }

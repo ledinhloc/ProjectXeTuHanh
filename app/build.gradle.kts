@@ -37,6 +37,7 @@ dependencies {
     implementation(libs.material)
     implementation(libs.activity)
     implementation(libs.constraintlayout)
+    implementation(project(":sdk"))
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
@@ -55,4 +56,6 @@ dependencies {
     implementation(libs.camera.camera2.v130)
     implementation(libs.camera.lifecycle.v130)
     implementation(libs.camera.view.v130)
+//    implementation(libs.opencv.android)
+
 }
