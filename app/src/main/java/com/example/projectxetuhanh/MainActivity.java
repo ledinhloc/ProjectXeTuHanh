@@ -51,6 +51,7 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.gpu.GpuDelegate;
 
 import android.graphics.Rect;
 
@@ -67,6 +68,9 @@ public class MainActivity extends AppCompatActivity {
     private int inputWidth;
     private int inputHeight;
     private int inputChannels;
+
+    private Mat yuvMat, rgbMat, grayMat, faceMat;
+    private ByteBuffer imgBuffer;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,8 +102,11 @@ public class MainActivity extends AppCompatActivity {
         try {
             // Load TFLite model
             tflite = new Interpreter(loadModelFile("face_model.tflite"));
-
-            // Lấy thông số đầu vào
+//            Interpreter.Options options = new Interpreter.Options();
+//            GpuDelegate delegate = new GpuDelegate();
+//            options.addDelegate(delegate);
+//            tflite = new Interpreter(loadModelFile("face_model.tflite"), options);
+//            // Lấy thông số đầu vào
             Tensor inputTensor = tflite.getInputTensor(0);
             int[] inputShape = inputTensor.shape();
             inputWidth = inputShape[1];
@@ -180,9 +187,9 @@ public class MainActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
-        Mat rgbMat = null;
-        Mat grayMat = null;
-        Mat faceMat = null;
+//        Mat rgbMat = null;
+//        Mat grayMat = null;
+//        Mat faceMat = null;
         try {
             // Chuyển đổi ImageProxy sang RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
@@ -232,9 +239,9 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e("FaceRecognition", "Analysis error", e);
         } finally {
-            if (rgbMat != null) rgbMat.release();
-            if (grayMat != null) grayMat.release();
-            if (faceMat != null) faceMat.release();
+//            if (rgbMat != null) rgbMat.release();
+//            if (grayMat != null) grayMat.release();
+     //       if (faceMat != null) faceMat.release();
             imageProxy.close();
         }
     }
@@ -265,11 +272,11 @@ public class MainActivity extends AppCompatActivity {
         uBuffer.get(yuvBytes, yBuffer.remaining() + vBuffer.remaining(), uBuffer.remaining());
 
         // Tạo Mat YUV
-        Mat yuvMat = new Mat(height + height/2, width, CvType.CV_8UC1);
+        yuvMat = new Mat(height + height/2, width, CvType.CV_8UC1);
         yuvMat.put(0, 0, yuvBytes); // Copy toàn bộ dữ liệu vào Mat
 
         // Chuyển YUV → RGB
-        Mat rgbMat = new Mat();
+        rgbMat = new Mat();
         Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV21);
 
         return rgbMat;
@@ -294,16 +301,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Tạo buffer với kiểu UINT8
-        ByteBuffer buffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
-        buffer.order(ByteOrder.nativeOrder());
+        imgBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
+        imgBuffer.order(ByteOrder.nativeOrder());
 
         // Điền dữ liệu byte (0-255)
         byte[] pixelData = new byte[(int) mat.total() * mat.channels()];
         mat.get(0, 0, pixelData);
-        buffer.put(pixelData);
-        buffer.rewind();
+        imgBuffer.put(pixelData);
+        imgBuffer.rewind();
 
-        return buffer;
+        return imgBuffer;
     }
 
     private int getMaxIndex(byte[] array) {
