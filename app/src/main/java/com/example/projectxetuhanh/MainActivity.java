@@ -78,6 +78,7 @@ public class MainActivity extends AppCompatActivity {
         });
         //preview
         previewView = findViewById(R.id.previewView);
+        overlayView = findViewById(R.id.overlay);
 
         // Kiểm tra quyền camera
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
