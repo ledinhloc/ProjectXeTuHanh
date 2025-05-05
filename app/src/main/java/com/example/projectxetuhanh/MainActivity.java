@@ -9,6 +9,8 @@ import android.util.Log;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Size;
+
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -72,6 +74,10 @@ public class MainActivity extends AppCompatActivity {
     private Mat yuvMat, rgbMat, grayMat, faceMat;
     private ByteBuffer imgBuffer;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+    private ProcessCameraProvider cameraProvider;
+    ImageButton btnSwitch ;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -85,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
         //preview
         previewView = findViewById(R.id.previewView);
         overlayView = findViewById(R.id.overlay);
+        btnSwitch = findViewById(R.id.btnSwitchCamera);
 
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
@@ -95,6 +102,17 @@ public class MainActivity extends AppCompatActivity {
         loadCascade();
         loadModel();
         startCamera();
+
+        btnSwitch.setOnClickListener(v -> {
+            // Đổi selector
+            if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
+                cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+            } else {
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+            }
+            // Khởi động lại camera với selector mới
+            startCamera();
+        });
     }
 
     @SuppressLint("NewApi")
@@ -155,7 +173,9 @@ public class MainActivity extends AppCompatActivity {
         ListenableFuture<ProcessCameraProvider> future = ProcessCameraProvider.getInstance(this);
         future.addListener(() -> {
             try {
-                ProcessCameraProvider cameraProvider = future.get();
+                cameraProvider = future.get();
+                // Trước khi bind lại, unbind hết các use-cases cũ
+                cameraProvider.unbindAll();
 
                 // Tạo và cấu hình Preview
                 Preview preview = new Preview.Builder().build();
@@ -167,9 +187,6 @@ public class MainActivity extends AppCompatActivity {
                         .build();
 
                 imageAnalysis.setAnalyzer(executor, this::analyzeImage);
-
-                // Chọn camera sau (back camera)
-                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
 
                 // Bind các use cases vào vòng đời
                 cameraProvider.bindToLifecycle(
