@@ -204,9 +204,6 @@ public class MainActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
-//        Mat rgbMat = null;
-//        Mat grayMat = null;
-//        Mat faceMat = null;
         try {
             // Chuyển đổi ImageProxy sang RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
@@ -223,7 +220,7 @@ public class MainActivity extends AppCompatActivity {
             MatOfRect faces = new MatOfRect();
             faceCascade.detectMultiScale(
                     grayMat, faces,
-                    1.1, 4, 0,
+                    1.1, 6, 0,
                     new Size(80, 80),
                     new Size(400, 400)
             );
@@ -244,23 +241,59 @@ public class MainActivity extends AppCompatActivity {
                 String label = (confidence > CONFIDENCE_THRESHOLD) ?
                         labels.get(classId) : "Unknown";
 
+                // Xử lý nếu là khuôn mặt "Loc"
+                if (label.equals("Loc")) {
+                    // Lấy chiều rộng của khung hình
+                    int imageWidth = rgbMat.cols();
+
+                    // Tính tâm ngang của màn hình (đơn vị pixel)
+                    int imageCenterX = imageWidth / 2;
+
+                    // Tính tâm ngang của khuôn mặt (đơn vị pixel)
+                    int faceCenterX = rect.x + rect.width / 2;
+
+                    // Độ lệch giữa tâm mặt và tâm màn hình
+                    int deviation = faceCenterX - imageCenterX;
+                    // Độ lệch tối đa có thể (bằng nửa chiều rộng màn hình)
+                    int maxDeviation = imageWidth / 2;
+
+                    //di thang
+                    String direction = "W";
+                    //Ti le mac dinh
+                    int ratio = 0;
+
+                    if (deviation != 0) {
+                        // Tính tỉ lệ 0-100 dựa trên độ lệch
+                        ratio = (int) (Math.abs(deviation) / (float) maxDeviation * 100);
+                        ratio = Math.max(0, Math.min(100, ratio)); // Giới hạn tỉ lệ 0-100
+
+                        direction = deviation < 0 ? "A" : "D"; // Âm = trái, Dương = phải
+                    }
+                    sendControlCommand(direction, ratio);
+                }
+
                 results.add(new FaceResult(
                         new Rect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
                         label,
                         confidence
                 ));
             }
-
             overlayView.setFaces(results, rgbMat.cols(), rgbMat.rows());
-
         } catch (Exception e) {
             Log.e("FaceRecognition", "Analysis error", e);
         } finally {
-//            if (rgbMat != null) rgbMat.release();
-//            if (grayMat != null) grayMat.release();
-     //       if (faceMat != null) faceMat.release();
             imageProxy.close();
         }
+    }
+
+//    private void sendControlCommand(String direction, int ratio) {
+//        String data = direction + (direction.equals("W") ? "" : ratio);
+//        Log.d("Control", "Sending command: " + data);
+//    }
+
+    private void sendControlCommand(String direction, int ratio) {
+        String data = direction + (direction.equals("W") ? "" : ratio);
+        Log.d("Control", "Sending command: " + data);
     }
 
     private Mat yuv420ToRgbMat(Image image) {
