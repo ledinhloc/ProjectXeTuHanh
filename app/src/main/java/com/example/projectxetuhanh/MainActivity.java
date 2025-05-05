@@ -9,6 +9,8 @@ import android.util.Log;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Size;
+
+import android.widget.ImageButton;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -51,6 +53,7 @@ import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 import org.tensorflow.lite.Interpreter;
 import org.tensorflow.lite.Tensor;
+import org.tensorflow.lite.gpu.GpuDelegate;
 
 import android.graphics.Rect;
 
@@ -58,7 +61,6 @@ import android.graphics.Rect;
 public class MainActivity extends AppCompatActivity {
     private PreviewView previewView;
     private FaceOverlayView overlayView;
-    private ProcessCameraProvider cameraProvider;
     private CascadeClassifier faceCascade;
     private Interpreter tflite;
     private List<String> labels = new ArrayList<>();
@@ -68,7 +70,14 @@ public class MainActivity extends AppCompatActivity {
     private int inputWidth;
     private int inputHeight;
     private int inputChannels;
+
+    private Mat yuvMat, rgbMat, grayMat, faceMat;
+    private ByteBuffer imgBuffer;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
+
+    private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+    private ProcessCameraProvider cameraProvider;
+    ImageButton btnSwitch ;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -82,6 +91,7 @@ public class MainActivity extends AppCompatActivity {
         //preview
         previewView = findViewById(R.id.previewView);
         overlayView = findViewById(R.id.overlay);
+        btnSwitch = findViewById(R.id.btnSwitchCamera);
 
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
@@ -92,6 +102,17 @@ public class MainActivity extends AppCompatActivity {
         loadCascade();
         loadModel();
         startCamera();
+
+        btnSwitch.setOnClickListener(v -> {
+            // Đổi selector
+            if (cameraSelector == CameraSelector.DEFAULT_BACK_CAMERA) {
+                cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA;
+            } else {
+                cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+            }
+            // Khởi động lại camera với selector mới
+            startCamera();
+        });
     }
 
     @SuppressLint("NewApi")
@@ -99,19 +120,22 @@ public class MainActivity extends AppCompatActivity {
         try {
             // Load TFLite model
             tflite = new Interpreter(loadModelFile("face_model.tflite"));
-
-            // Lấy thông số đầu vào
+//            Interpreter.Options options = new Interpreter.Options();
+//            GpuDelegate delegate = new GpuDelegate();
+//            options.addDelegate(delegate);
+//            tflite = new Interpreter(loadModelFile("face_model.tflite"), options);
+//            // Lấy thông số đầu vào
             Tensor inputTensor = tflite.getInputTensor(0);
             int[] inputShape = inputTensor.shape();
             inputWidth = inputShape[1];
             inputHeight = inputShape[2];
             inputChannels = inputShape[3];
 
+            //load labels
             try {
                 InputStream is = getAssets().open("labels.txt");
                 byte[] bytes = is.readAllBytes();
                 String content = new String(bytes, StandardCharsets.UTF_8);
-                // split cả CRLF (\r\n) lẫn LF (\n)
                 labels = Arrays.asList(content.split("\\r?\\n"));
                 is.close();
             } catch (IOException e) {
@@ -149,7 +173,9 @@ public class MainActivity extends AppCompatActivity {
         ListenableFuture<ProcessCameraProvider> future = ProcessCameraProvider.getInstance(this);
         future.addListener(() -> {
             try {
-                ProcessCameraProvider cameraProvider = future.get();
+                cameraProvider = future.get();
+                // Trước khi bind lại, unbind hết các use-cases cũ
+                cameraProvider.unbindAll();
 
                 // Tạo và cấu hình Preview
                 Preview preview = new Preview.Builder().build();
@@ -161,11 +187,6 @@ public class MainActivity extends AppCompatActivity {
                         .build();
 
                 imageAnalysis.setAnalyzer(executor, this::analyzeImage);
-
-                // Chọn camera sau (back camera)
-                CameraSelector cameraSelector = new CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build();
 
                 // Bind các use cases vào vòng đời
                 cameraProvider.bindToLifecycle(
@@ -183,9 +204,12 @@ public class MainActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
+//        Mat rgbMat = null;
+//        Mat grayMat = null;
+//        Mat faceMat = null;
         try {
             // Chuyển đổi ImageProxy sang RGB Mat
-            Mat rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
+            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
 
             // Xử lý xoay ảnh
             int rotation = imageProxy.getImageInfo().getRotationDegrees();
@@ -194,21 +218,20 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // Phát hiện khuôn mặt
-            Mat grayMat = new Mat();
+            grayMat = new Mat();
             Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
-
             MatOfRect faces = new MatOfRect();
             faceCascade.detectMultiScale(
                     grayMat, faces,
                     1.1, 4, 0,
-                    new Size(100, 100),
-                    new Size(1000, 1000)
+                    new Size(80, 80),
+                    new Size(400, 400)
             );
 
             // Xử lý từng khuôn mặt
             List<FaceResult> results = new ArrayList<>();
             for (org.opencv.core.Rect rect : faces.toArray()) {
-                Mat faceMat = preprocessFace(rgbMat.submat(rect));
+                faceMat = preprocessFace(rgbMat.submat(rect));
                 ByteBuffer buffer = convertMatToBuffer(faceMat);
 
                 // Inference
@@ -233,6 +256,9 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             Log.e("FaceRecognition", "Analysis error", e);
         } finally {
+//            if (rgbMat != null) rgbMat.release();
+//            if (grayMat != null) grayMat.release();
+     //       if (faceMat != null) faceMat.release();
             imageProxy.close();
         }
     }
@@ -263,11 +289,11 @@ public class MainActivity extends AppCompatActivity {
         uBuffer.get(yuvBytes, yBuffer.remaining() + vBuffer.remaining(), uBuffer.remaining());
 
         // Tạo Mat YUV
-        Mat yuvMat = new Mat(height + height/2, width, CvType.CV_8UC1);
+        yuvMat = new Mat(height + height/2, width, CvType.CV_8UC1);
         yuvMat.put(0, 0, yuvBytes); // Copy toàn bộ dữ liệu vào Mat
 
         // Chuyển YUV → RGB
-        Mat rgbMat = new Mat();
+        rgbMat = new Mat();
         Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV21);
 
         return rgbMat;
@@ -292,16 +318,16 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Tạo buffer với kiểu UINT8
-        ByteBuffer buffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
-        buffer.order(ByteOrder.nativeOrder());
+        imgBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
+        imgBuffer.order(ByteOrder.nativeOrder());
 
         // Điền dữ liệu byte (0-255)
         byte[] pixelData = new byte[(int) mat.total() * mat.channels()];
         mat.get(0, 0, pixelData);
-        buffer.put(pixelData);
-        buffer.rewind();
+        imgBuffer.put(pixelData);
+        imgBuffer.rewind();
 
-        return buffer;
+        return imgBuffer;
     }
 
     private int getMaxIndex(byte[] array) {
@@ -323,103 +349,10 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-//    @OptIn(markerClass = ExperimentalGetImage.class)
-//    private Mat imageProxyToMat(ImageProxy imageProxy) {
-//        Image image = imageProxy.getImage();
-//        ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-//        byte[] data = new byte[buffer.remaining()];
-//        buffer.get(data);
-//
-//        Mat mat = new Mat(image.getHeight(), image.getWidth(), CvType.CV_8UC3); // Định dạng phụ thuộc vào camera
-//        mat.put(0, 0, data);
-//        return mat;
-//    }
-
-//    private void processImage(ImageProxy imageProxy) {
-//        Mat mat = imageProxyToMat(imageProxy);
-//        Bitmap bitmap = Bitmap.createBitmap(
-//                imageProxy.getWidth(), imageProxy.getHeight(), Bitmap.Config.ARGB_8888);
-//
-////        Utils.bitmapToMat(bitmap, mat);
-//        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGBA2GRAY);
-//
-//        // Detect faces
-//        MatOfRect faces = new MatOfRect();
-//        faceCascade.detectMultiScale(mat, faces, 1.1, 4);
-//        List<FaceResult> faceResults = new ArrayList<>();
-//
-//        for (org.opencv.core.Rect rect : faces.toArray()) {
-//            Rect androidRect = new Rect(
-//                    rect.x,                 // left
-//                    rect.y,                 // top
-//                    rect.x + rect.width,    // right
-//                    rect.y + rect.height   // bottom
-//            );
-//            // Preprocess và inference
-//            Mat faceMat = new Mat(mat, rect);
-//            faceMat = preprocessFace(faceMat);
-//            float[][] output = new float[1][labels.size()];
-//            tflite.run(convertMatToBuffer(faceMat), output);
-//
-//            int classId = getMaxClass(output[0]);
-//            float confidence = output[0][classId];
-//            String label = confidence > CONFIDENCE_THRESHOLD ?
-//                    labels.get(classId) : "Unknown";
-//
-//            faceResults.add(new FaceResult(androidRect, label, confidence));
-//
-//        }
-//        faceResults.add(new FaceResult(
-//                new Rect(200, 150, 400, 350), // left, top, right, bottom
-//                "Elon Musk",
-//                0.85f
-//        ));
-//        overlayView.setFaces(faceResults, imageProxy.getWidth(), imageProxy.getHeight());
-//        imageProxy.close();
-//    }
-
-
-
-
-//    private Mat preprocessFace(Mat faceMat) {
-//        Mat resized = new Mat();
-//        Imgproc.resize(faceMat, resized, new Size(100, 100)); // Thay đổi kích thước theo model
-//        return resized;
-//    }
-//
-//    private ByteBuffer convertMatToBuffer(Mat mat) {
-//        int height = mat.rows(), width = mat.cols(), channels = 1;
-//        int byteSize = 1 * height * width * channels; // 1 batch
-//        ByteBuffer buffer = ByteBuffer.allocateDirect(byteSize);
-//        buffer.order(ByteOrder.nativeOrder());
-//
-//        for (int i = 0; i < height; i++) {
-//            for (int j = 0; j < width; j++) {
-//                int pixel = (int) mat.get(i, j)[0]; // 0–255
-//                buffer.put((byte) pixel);
-//            }
-//        }
-//
-//        buffer.rewind();
-//        return buffer;
-//    }
-
-
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (cameraProvider != null) {
-            cameraProvider.unbindAll();
-        }
         executor.shutdown();
-    }
-
-    private int getMaxClass(float[] output) {
-        int maxIndex = 0;
-        for (int i = 1; i < output.length; i++) {
-            if (output[i] > output[maxIndex]) maxIndex = i;
-        }
-        return maxIndex;
     }
 
     //xu ly sau khi duoc cap quyen
@@ -434,5 +367,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-
 }

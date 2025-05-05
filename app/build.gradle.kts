@@ -57,5 +57,5 @@ dependencies {
     implementation(libs.camera.lifecycle.v130)
     implementation(libs.camera.view.v130)
 //    implementation(libs.opencv.android)
-
+    implementation(libs.tensorflow.lite.gpu)
 }
