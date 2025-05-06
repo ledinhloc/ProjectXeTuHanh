@@ -1,8 +1,17 @@
 package com.example.projectxetuhanh;
 
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbManager;
 import android.media.Image;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -16,6 +25,7 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExperimentalGetImage;
@@ -29,6 +39,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.felhr.usbserial.SerialOutputStream;
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
@@ -78,6 +91,43 @@ public class MainActivity extends AppCompatActivity {
     private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
     private ProcessCameraProvider cameraProvider;
     ImageButton btnSwitch ;
+
+    UsbManager usbManager;
+    ConnectUsb connectUsb;
+    private PendingIntent permissionIntent;
+
+    private static final String TAG = "MainActivity";
+    private static final String ACTION_USB_PERMISSION = "com.example.USB_PERMISSION";
+
+    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if (device != null && connectUsb.isArduinoDevice(device)) {
+                            // Gọi initialize với device cụ thể
+                            if (connectUsb.initialize(device)) {
+                                runOnUiThread(() -> showStatus("Connected to Arduino"));
+                            } else {
+                                runOnUiThread(() -> showStatus("Connection failed"));
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "Permission denied for device " + device);
+                    }
+                }
+            }
+        }
+    };
+
+    private void showStatus(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -96,6 +146,27 @@ public class MainActivity extends AppCompatActivity {
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
         initializeApp();
+
+        // Khởi tạo USB Manager
+        usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        connectUsb = new ConnectUsb(usbManager);
+        // Tạo PendingIntent cho quyền USB
+        permissionIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                new Intent(ACTION_USB_PERMISSION),
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // Đăng ký BroadcastReceiver
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        }
+
+        // Kiểm tra thiết bị ngay khi khởi động
+//        checkUsbDevice();
     }
 
     private void initializeApp() {
@@ -204,9 +275,6 @@ public class MainActivity extends AppCompatActivity {
 
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
-//        Mat rgbMat = null;
-//        Mat grayMat = null;
-//        Mat faceMat = null;
         try {
             // Chuyển đổi ImageProxy sang RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
@@ -223,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
             MatOfRect faces = new MatOfRect();
             faceCascade.detectMultiScale(
                     grayMat, faces,
-                    1.1, 4, 0,
+                    1.1, 6, 0,
                     new Size(80, 80),
                     new Size(400, 400)
             );
@@ -244,24 +312,57 @@ public class MainActivity extends AppCompatActivity {
                 String label = (confidence > CONFIDENCE_THRESHOLD) ?
                         labels.get(classId) : "Unknown";
 
+                // Xử lý nếu là khuôn mặt "Loc"
+                if (label.equals("Loc")) {
+                    // Lấy chiều rộng của khung hình
+                    int imageWidth = rgbMat.cols();
+
+                    // Tính tâm ngang của màn hình (đơn vị pixel)
+                    int imageCenterX = imageWidth / 2;
+
+                    // Tính tâm ngang của khuôn mặt (đơn vị pixel)
+                    int faceCenterX = rect.x + rect.width / 2;
+
+                    // Độ lệch giữa tâm mặt và tâm màn hình
+                    int deviation = faceCenterX - imageCenterX;
+                    // Độ lệch tối đa có thể (bằng nửa chiều rộng màn hình)
+                    int maxDeviation = imageWidth / 2;
+
+                    //di thang
+                    String direction = "W";
+                    //Ti le mac dinh
+                    int ratio = 0;
+
+                    if (deviation != 0) {
+                        // Tính tỉ lệ 0-100 dựa trên độ lệch
+                        ratio = (int) (Math.abs(deviation) / (float) maxDeviation * 100);
+                        ratio = Math.max(0, Math.min(100, ratio)); // Giới hạn tỉ lệ 0-100
+
+                        direction = deviation < 0 ? "A" : "D"; // Âm = trái, Dương = phải
+                    }
+                    //sendControlCommand(direction, ratio);
+                    connectUsb.sendControlCommand(direction, ratio);
+                }
+
                 results.add(new FaceResult(
                         new Rect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
                         label,
                         confidence
                 ));
             }
-
             overlayView.setFaces(results, rgbMat.cols(), rgbMat.rows());
-
         } catch (Exception e) {
             Log.e("FaceRecognition", "Analysis error", e);
         } finally {
-//            if (rgbMat != null) rgbMat.release();
-//            if (grayMat != null) grayMat.release();
-     //       if (faceMat != null) faceMat.release();
             imageProxy.close();
         }
     }
+
+//    private void sendControlCommand(String direction, int ratio) {
+//        String data = direction + (direction.equals("W") ? "" : ratio);
+//        Log.d("Control", "Sending command: " + data);
+//    }
+
 
     private Mat yuv420ToRgbMat(Image image) {
         // Lấy thông số ảnh
@@ -353,6 +454,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        unregisterReceiver(usbReceiver);
+        if (connectUsb != null) {
+            connectUsb.close();
+        }
     }
 
     //xu ly sau khi duoc cap quyen
