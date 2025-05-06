@@ -58,6 +58,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
@@ -91,13 +92,16 @@ public class MainActivity extends AppCompatActivity {
     private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
     private ProcessCameraProvider cameraProvider;
     ImageButton btnSwitch ;
+    //bo qua khung hinh
+    private AtomicInteger frameCount = new AtomicInteger(0);
+    private static final int FRAME_SKIP_RATE = 4;
 
     UsbManager usbManager;
     ConnectUsb connectUsb;
     private PendingIntent permissionIntent;
 
     private static final String TAG = "MainActivity";
-    private static final String ACTION_USB_PERMISSION = "com.example.USB_PERMISSION";
+    private static final String ACTION_USB_PERMISSION = "com.example.projectxetuhanh.USB_PERMISSION";
 
     private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
         @Override
@@ -276,6 +280,12 @@ public class MainActivity extends AppCompatActivity {
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
         try {
+            //bỏ qua 4 khung hình = 5-1
+            if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
+                imageProxy.close();
+                return;
+            }
+
             // Chuyển đổi ImageProxy sang RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
 
