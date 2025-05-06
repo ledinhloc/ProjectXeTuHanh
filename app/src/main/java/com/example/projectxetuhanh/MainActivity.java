@@ -1,8 +1,17 @@
 package com.example.projectxetuhanh;
 
 import android.annotation.SuppressLint;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbManager;
 import android.media.Image;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -16,6 +25,7 @@ import android.widget.Toast;
 import androidx.activity.EdgeToEdge;
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExperimentalGetImage;
@@ -29,6 +39,9 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
+import com.felhr.usbserial.SerialOutputStream;
+import com.felhr.usbserial.UsbSerialDevice;
+import com.felhr.usbserial.UsbSerialInterface;
 import com.google.common.util.concurrent.ListenableFuture;
 
 import java.io.File;
@@ -78,6 +91,43 @@ public class MainActivity extends AppCompatActivity {
     private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
     private ProcessCameraProvider cameraProvider;
     ImageButton btnSwitch ;
+
+    UsbManager usbManager;
+    ConnectUsb connectUsb;
+    private PendingIntent permissionIntent;
+
+    private static final String TAG = "MainActivity";
+    private static final String ACTION_USB_PERMISSION = "com.example.USB_PERMISSION";
+
+    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (ACTION_USB_PERMISSION.equals(action)) {
+                synchronized (this) {
+                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
+                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
+                        if (device != null && connectUsb.isArduinoDevice(device)) {
+                            // Gọi initialize với device cụ thể
+                            if (connectUsb.initialize(device)) {
+                                runOnUiThread(() -> showStatus("Connected to Arduino"));
+                            } else {
+                                runOnUiThread(() -> showStatus("Connection failed"));
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "Permission denied for device " + device);
+                    }
+                }
+            }
+        }
+    };
+
+    private void showStatus(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -96,6 +146,27 @@ public class MainActivity extends AppCompatActivity {
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
         initializeApp();
+
+        // Khởi tạo USB Manager
+        usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
+        connectUsb = new ConnectUsb(usbManager);
+        // Tạo PendingIntent cho quyền USB
+        permissionIntent = PendingIntent.getBroadcast(
+                this,
+                0,
+                new Intent(ACTION_USB_PERMISSION),
+                PendingIntent.FLAG_IMMUTABLE
+        );
+
+        // Đăng ký BroadcastReceiver
+        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
+        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        }
+
+        // Kiểm tra thiết bị ngay khi khởi động
+//        checkUsbDevice();
     }
 
     private void initializeApp() {
@@ -269,7 +340,8 @@ public class MainActivity extends AppCompatActivity {
 
                         direction = deviation < 0 ? "A" : "D"; // Âm = trái, Dương = phải
                     }
-                    sendControlCommand(direction, ratio);
+                    //sendControlCommand(direction, ratio);
+                    connectUsb.sendControlCommand(direction, ratio);
                 }
 
                 results.add(new FaceResult(
@@ -291,10 +363,6 @@ public class MainActivity extends AppCompatActivity {
 //        Log.d("Control", "Sending command: " + data);
 //    }
 
-    private void sendControlCommand(String direction, int ratio) {
-        String data = direction + (direction.equals("W") ? "" : ratio);
-        Log.d("Control", "Sending command: " + data);
-    }
 
     private Mat yuv420ToRgbMat(Image image) {
         // Lấy thông số ảnh
@@ -386,6 +454,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
+        unregisterReceiver(usbReceiver);
+        if (connectUsb != null) {
+            connectUsb.close();
+        }
     }
 
     //xu ly sau khi duoc cap quyen
