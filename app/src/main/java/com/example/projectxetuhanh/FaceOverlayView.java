@@ -19,7 +19,9 @@ import android.view.View;
 import java.util.ArrayList;
 import java.util.List;
 
+//View vẽ khung bao quanh nhan
 public class FaceOverlayView extends View {
+    //danh sach doi tuong
     private List<FaceResult> faces = new ArrayList<>();
     private int imageWidth, imageHeight;
     private Paint paint = new Paint();
@@ -35,6 +37,7 @@ public class FaceOverlayView extends View {
         init();
     }
 
+    //khoi tao
     private void init() {
         paint.setColor(Color.GREEN);
         paint.setStyle(Paint.Style.STROKE);
@@ -51,6 +54,7 @@ public class FaceOverlayView extends View {
         postInvalidate();
     }
 
+    //onDraw được gọi khi View cần vẽ lại.
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -66,16 +70,20 @@ public class FaceOverlayView extends View {
             float right = rect.right * scaleX;
             float bottom = rect.bottom * scaleY;
 
+            //Vẽ khung chữ nhật quanh khuôn mặt bằng paint
             canvas.drawRect(left, top, right, bottom, paint);
             canvas.drawText(face.label + " (" + String.format("%.2f", face.confidence) + ")",
                     left, top - 10, textPaint);
         }
     }
 }
-
+//
 class FaceResult {
+    // vùng khuôn mặt
     Rect rect;
+    //ten label
     String label;
+    //mức độ chắc chắn
     float confidence;
 
     public FaceResult(Rect rect, String label, float confidence) {
