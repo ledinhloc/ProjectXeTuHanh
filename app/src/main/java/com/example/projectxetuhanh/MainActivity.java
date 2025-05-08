@@ -204,7 +204,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     private void loadModel() {
         try {
             // Load TFLite model
-            tflite = new Interpreter(loadModelFile("face_model_v6.tflite"));
+            tflite = new Interpreter(loadModelFile("face_model.tflite"));
 //            Interpreter.Options options = new Interpreter.Options();
 //            GpuDelegate delegate = new GpuDelegate();
 //            options.addDelegate(delegate);
@@ -335,7 +335,21 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             // 6. Xử lý từng face, build results như cũ...
             List<FaceResult> results = new ArrayList<>();
             for (org.opencv.core.Rect rect : faces.toArray()) {
-                faceMat = preprocessFace(rgbMat.submat(rect));
+
+                // Mirror tọa độ X nếu là camera trước
+                int adjustedX = (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
+                        ? (rotatedWidth - rect.x - rect.width)  // Đảo ngược tọa độ X
+                        : rect.x;
+
+                // Tạo Rect mới với tọa độ đã điều chỉnh
+                org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
+                        adjustedX,
+                        rect.y,
+                        rect.width,
+                        rect.height
+                );
+
+                faceMat = preprocessFace(rgbMat.submat(adjustedRect));
                 ByteBuffer buffer = convertMatToBuffer(faceMat);
 
                 // Inference
@@ -350,38 +364,18 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
 
                 // Xử lý nếu là khuôn mặt "Loc"
                 if (label.equals("Loc")) {
-                    // Lấy chiều rộng của khung hình
-                    int imageWidth = rgbMat.cols();
-
-                    // Tính tâm ngang của màn hình (đơn vị pixel)
-                    int imageCenterX = imageWidth / 2;
-
-                    // Tính tâm ngang của khuôn mặt (đơn vị pixel)
-                    int faceCenterX = rect.x + rect.width / 2;
-
-                    // Độ lệch giữa tâm mặt và tâm màn hình
+                    int faceCenterX = adjustedRect.x + adjustedRect.width / 2;
+                    int imageCenterX = rotatedWidth / 2;
                     int deviation = faceCenterX - imageCenterX;
-                    // Độ lệch tối đa có thể (bằng nửa chiều rộng màn hình)
-                    int maxDeviation = imageWidth / 2;
 
-                    //di thang
                     String direction = "F";
-                    //Ti le mac dinh
-                    int ratio = 0;
-
                     if (deviation != 0) {
-                        // Tính tỉ lệ 0-100 dựa trên độ lệch
-//                        ratio = (int) (Math.abs(deviation) / (float) maxDeviation * 100);
-//                        ratio = Math.max(0, Math.min(100, ratio)); // Giới hạn tỉ lệ 0-100
-
-                        direction = deviation < 0 ? "L" : "R"; // Âm = trái, Dương = phải
+                        direction = deviation < 0 ? "L" : "R";
                     }
                     sendCommand(direction);
-                  //  sendControlCommand(direction, ratio);
-//                    connectUsb.sendControlCommand(direction, ratio);
                 }
                 results.add(new FaceResult(
-                        new Rect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+                        new Rect(adjustedRect.x, adjustedRect.y, adjustedRect.x + adjustedRect.width, adjustedRect.y + adjustedRect.height),
                         label, confidence
                 ));
             }
