@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.projectxetuhanh"
-        minSdk = 24
+        minSdk = 29
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -58,4 +58,5 @@ dependencies {
     implementation(libs.camera.view.v130)
 //    implementation(libs.opencv.android)
     implementation(libs.tensorflow.lite.gpu)
+    implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
 }

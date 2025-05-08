@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbManager;
@@ -19,6 +21,7 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Size;
 
+import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
@@ -38,6 +41,8 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.felhr.usbserial.SerialOutputStream;
 import com.felhr.usbserial.UsbSerialDevice;
@@ -58,6 +63,7 @@ import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
@@ -71,7 +77,7 @@ import org.tensorflow.lite.gpu.GpuDelegate;
 import android.graphics.Rect;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements ArduinoUsbController.ConnectionCallback {
     private PreviewView previewView;
     private FaceOverlayView overlayView;
     private CascadeClassifier faceCascade;
@@ -90,42 +96,17 @@ public class MainActivity extends AppCompatActivity {
 
     private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
     private ProcessCameraProvider cameraProvider;
-    ImageButton btnSwitch ;
+    ImageButton btnSwitch, btnCar ;
+    //bo qua khung hinh
+    private AtomicInteger frameCount = new AtomicInteger(0);
+    private static final int FRAME_SKIP_RATE = 3;
 
-    UsbManager usbManager;
-    ConnectUsb connectUsb;
-    private PendingIntent permissionIntent;
+    private ArduinoUsbController arduinoController;
 
     private static final String TAG = "MainActivity";
-    private static final String ACTION_USB_PERMISSION = "com.example.USB_PERMISSION";
 
-    private final BroadcastReceiver usbReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if (ACTION_USB_PERMISSION.equals(action)) {
-                synchronized (this) {
-                    UsbDevice device = intent.getParcelableExtra(UsbManager.EXTRA_DEVICE);
-                    if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        if (device != null && connectUsb.isArduinoDevice(device)) {
-                            // Gọi initialize với device cụ thể
-                            if (connectUsb.initialize(device)) {
-                                runOnUiThread(() -> showStatus("Connected to Arduino"));
-                            } else {
-                                runOnUiThread(() -> showStatus("Connection failed"));
-                            }
-                        }
-                    } else {
-                        Log.d(TAG, "Permission denied for device " + device);
-                    }
-                }
-            }
-        }
-    };
-
-    private void showStatus(String message) {
-        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
-    }
+    private LogAdapter logAdapter;
+    private RecyclerView logRecyclerView;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -138,41 +119,32 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        hideSystemUI();
+
+        initView();
+        // Khởi tạo OpenCV
+        OpenCVLoader.initLocal();
+        initializeApp();
+    }
+
+    private void hideSystemUI() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+        );
+    }
+
+    private void initView() {
         //preview
         previewView = findViewById(R.id.previewView);
         overlayView = findViewById(R.id.overlay);
         btnSwitch = findViewById(R.id.btnSwitchCamera);
-
-        // Khởi tạo OpenCV
-        OpenCVLoader.initLocal();
-        initializeApp();
-
-        // Khởi tạo USB Manager
-        usbManager = (UsbManager) getSystemService(Context.USB_SERVICE);
-        connectUsb = new ConnectUsb(usbManager);
-        // Tạo PendingIntent cho quyền USB
-        permissionIntent = PendingIntent.getBroadcast(
-                this,
-                0,
-                new Intent(ACTION_USB_PERMISSION),
-                PendingIntent.FLAG_IMMUTABLE
-        );
-
-        // Đăng ký BroadcastReceiver
-        IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
-        filter.addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            registerReceiver(usbReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
-        }
-
-        // Kiểm tra thiết bị ngay khi khởi động
-//        checkUsbDevice();
-    }
-
-    private void initializeApp() {
-        loadCascade();
-        loadModel();
-        startCamera();
+        btnCar = findViewById(R.id.btnCar);
 
         btnSwitch.setOnClickListener(v -> {
             // Đổi selector
@@ -184,6 +156,63 @@ public class MainActivity extends AppCompatActivity {
             // Khởi động lại camera với selector mới
             startCamera();
         });
+
+        //btnCar
+        btnCar.setOnClickListener(v->{
+            if (arduinoController.isConnected()){
+                //huy connect
+                if (!arduinoController.disconnect()) {
+                    addLogEntry("huy ket noi that bai");
+                    return;
+                };
+                btnCar.setImageResource(R.drawable.car);
+                btnCar.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+            }else {
+                //connect
+                if (!arduinoController.connect()) {
+                    addLogEntry("ket noi that bai");
+                    return;
+                };
+                btnCar.setImageResource(R.drawable.carstart);
+                btnCar.setImageTintList(null);
+            }
+        });
+
+        // Khởi tạo log console
+        logRecyclerView = findViewById(R.id.logRecyclerView);
+        logAdapter = new LogAdapter();
+        logRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        logRecyclerView.setAdapter(logAdapter);
+    }
+
+    // Phương thức mới
+    private void updateButtonState() {
+        runOnUiThread(() -> {
+            if (arduinoController.isConnected()) {
+                btnCar.setImageResource(R.drawable.carstart);
+                btnCar.setImageTintList(null);
+            } else {
+                btnCar.setImageResource(R.drawable.car);
+                btnCar.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+            }
+        });
+    }
+
+    private void addLogEntry(String message) {
+        runOnUiThread(() -> {
+            logAdapter.addLog(message);
+            logRecyclerView.smoothScrollToPosition(logAdapter.getItemCount() - 1);
+        });
+    }
+
+    private void initializeApp() {
+        loadCascade();
+        loadModel();
+        startCamera();
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arduinoController = new ArduinoUsbController(this, this);
+        }
     }
 
     @SuppressLint("NewApi")
@@ -276,30 +305,75 @@ public class MainActivity extends AppCompatActivity {
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
         try {
-            // Chuyển đổi ImageProxy sang RGB Mat
-            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
-
-            // Xử lý xoay ảnh
-            int rotation = imageProxy.getImageInfo().getRotationDegrees();
-            if (rotation == 90 || rotation == 270) {
-                Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
+            // 1. Skip frame
+            if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
+                imageProxy.close();
+                return;
             }
 
-            // Phát hiện khuôn mặt
+            // 2. Chuyển ImageProxy -> RGB Mat
+            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
+
+            // 3. Xử lý xoay ảnh và tính toán tọa độ
+            int rotation = imageProxy.getImageInfo().getRotationDegrees();
+            boolean isLandscape = (rotation % 180 == 90);
+            int originalWidth = rgbMat.cols();
+            int originalHeight = rgbMat.rows();
+
+            // Xoay ảnh gốc
+            switch (rotation) {
+                case 90:
+                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
+                    break;
+                case 180:
+                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_180);
+                    break;
+                case 270:
+                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_COUNTERCLOCKWISE);
+                    break;
+            }
+
+            // 4. Lấy kích thước sau xoay
+            int rotatedWidth = rgbMat.cols();
+            int rotatedHeight = rgbMat.rows();
+
+            // 5. Phát hiện khuôn mặt
             grayMat = new Mat();
             Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
             MatOfRect faces = new MatOfRect();
-            faceCascade.detectMultiScale(
-                    grayMat, faces,
-                    1.1, 6, 0,
-                    new Size(80, 80),
-                    new Size(400, 400)
-            );
+            faceCascade.detectMultiScale(grayMat, faces, 1.1, 3, 0, new Size(100, 100), new Size(400, 400));
 
-            // Xử lý từng khuôn mặt
+            // 6. Xử lý từng khuôn mặt
             List<FaceResult> results = new ArrayList<>();
             for (org.opencv.core.Rect rect : faces.toArray()) {
-                faceMat = preprocessFace(rgbMat.submat(rect));
+                // Điều chỉnh tọa độ và kích thước theo hướng xoay
+                int adjustedX = rect.x;
+                int adjustedY = rect.y;
+                int adjustedWidth = rect.width;
+                int adjustedHeight = rect.height;
+
+                // Mirror cho camera trước
+                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                    adjustedX = rotatedWidth - rect.x - rect.width;
+                }
+
+                // Hoán đổi width/height nếu ở chế độ ngang
+                if (isLandscape) {
+                    adjustedWidth = rect.height;
+                    adjustedHeight = rect.width;
+                    adjustedY = rotatedHeight - rect.y - rect.height; // Điều chỉnh tọa độ Y
+                }
+
+                // Tạo Rect đã điều chỉnh
+                org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
+                        adjustedX,
+                        adjustedY,
+                        adjustedWidth,
+                        adjustedHeight
+                );
+
+                // ... Phần inference và xử lý nhãn
+                faceMat = preprocessFace(rgbMat.submat(adjustedRect));
                 ByteBuffer buffer = convertMatToBuffer(faceMat);
 
                 // Inference
@@ -312,57 +386,180 @@ public class MainActivity extends AppCompatActivity {
                 String label = (confidence > CONFIDENCE_THRESHOLD) ?
                         labels.get(classId) : "Unknown";
 
-                // Xử lý nếu là khuôn mặt "Loc"
+                // Xử lý hướng "Loc"
                 if (label.equals("Loc")) {
-                    // Lấy chiều rộng của khung hình
-                    int imageWidth = rgbMat.cols();
-
-                    // Tính tâm ngang của màn hình (đơn vị pixel)
-                    int imageCenterX = imageWidth / 2;
-
-                    // Tính tâm ngang của khuôn mặt (đơn vị pixel)
-                    int faceCenterX = rect.x + rect.width / 2;
-
-                    // Độ lệch giữa tâm mặt và tâm màn hình
+                    int faceCenterX = adjustedX + adjustedWidth / 2;
+                    int imageCenterX = rotatedWidth / 2;
                     int deviation = faceCenterX - imageCenterX;
-                    // Độ lệch tối đa có thể (bằng nửa chiều rộng màn hình)
-                    int maxDeviation = imageWidth / 2;
 
-                    //di thang
-                    String direction = "W";
-                    //Ti le mac dinh
-                    int ratio = 0;
-
+                    String direction = "F";
                     if (deviation != 0) {
-                        // Tính tỉ lệ 0-100 dựa trên độ lệch
-                        ratio = (int) (Math.abs(deviation) / (float) maxDeviation * 100);
-                        ratio = Math.max(0, Math.min(100, ratio)); // Giới hạn tỉ lệ 0-100
-
-                        direction = deviation < 0 ? "A" : "D"; // Âm = trái, Dương = phải
+                        direction = deviation < 0 ? "R" : "L";
                     }
-                    //sendControlCommand(direction, ratio);
-                    connectUsb.sendControlCommand(direction, ratio);
+                    sendCommand(direction);
                 }
 
                 results.add(new FaceResult(
-                        new Rect(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height),
+                        new Rect(adjustedX, adjustedY, adjustedX + adjustedWidth, adjustedY + adjustedHeight),
                         label,
                         confidence
                 ));
             }
-            overlayView.setFaces(results, rgbMat.cols(), rgbMat.rows());
+
+            // 7. Cập nhật overlay
+            overlayView.setFaces(results, rotatedWidth, rotatedHeight);
         } catch (Exception e) {
-            Log.e("FaceRecognition", "Analysis error", e);
+            Log.e("FaceRecognition", "Error", e);
         } finally {
             imageProxy.close();
         }
     }
 
-//    private void sendControlCommand(String direction, int ratio) {
-//        String data = direction + (direction.equals("W") ? "" : ratio);
-//        Log.d("Control", "Sending command: " + data);
+//    @OptIn(markerClass = ExperimentalGetImage.class)
+//    private void analyzeImage(@NonNull ImageProxy imageProxy) {
+//        try {
+//            // 1. Skip frame
+//            if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
+//                imageProxy.close();
+//                return;
+//            }
+//
+//            // 2. Chuyển ImageProxy -> RGB Mat
+//            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
+//
+//            // 3. Xoay đúng chiều theo rotationDegrees
+//            int rotation = imageProxy.getImageInfo().getRotationDegrees();
+//            boolean isLandscapeMode = (rotation % 180 == 90);
+//            switch (rotation) {
+//                case 90:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
+//                    break;
+//                case 180:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_180);
+//                    break;
+//                case 270:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_COUNTERCLOCKWISE);
+//                    break;
+//                default:
+//                    // 0 độ: không làm gì
+//            }
+//
+//            // 4. Tính kích thước sau khi xoay
+//            int rotatedWidth  = rgbMat.cols();
+//            int rotatedHeight = rgbMat.rows();
+//
+//            // 5. Phát hiện khuôn mặt trên ảnh đã xoay
+//            grayMat = new Mat();
+//            Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
+//            MatOfRect faces = new MatOfRect();
+//            faceCascade.detectMultiScale(
+//                    grayMat, faces,
+//                    1.1, // scaleFactor (tăng để tăng tốc)
+//                    3, // minNeighbors
+//                    0, // flags
+//                    new Size(100, 100), // minSize (lớn hơn để giảm số lượng kiểm tra)
+//                    new Size(400, 400)  // maxSize
+//            );
+//
+////            int adjustedX;
+//            // 6. Xử lý từng face, build results như cũ...
+//            List<FaceResult> results = new ArrayList<>();
+//            for (org.opencv.core.Rect rect : faces.toArray()) {
+//                // Mirror tọa độ X nếu là camera trước
+//                int adjustedX = rect.x;
+//                int adjustedY = rect.y;
+//                int adjustedWidth = rect.width;
+//                int adjustedHeight = rect.height;
+//                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+//                    // Mirror tọa độ X dựa trên chế độ xoay
+//                    if (isLandscapeMode) {
+//                        adjustedX = rotatedWidth - rect.x - rect.width;
+//                    } else {
+//                        adjustedX = rotatedHeight - rect.x - rect.width;
+//                    }
+//                } else {
+//                    adjustedX = rect.x;
+//                }
+//
+//                // Hoán đổi width/height nếu ảnh bị xoay 90/270 độ
+//                if (isLandscapeMode) {
+//                    adjustedWidth = rect.width;
+//                    adjustedHeight = rect.height;
+//                }
+//
+//                // Tạo Rect mới với tọa độ đã điều chỉnh
+//                org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
+//                        adjustedX,
+//                        adjustedY,
+//                        adjustedWidth,
+//                        adjustedHeight
+//                );
+//
+//                faceMat = preprocessFace(rgbMat.submat(adjustedRect));
+//                ByteBuffer buffer = convertMatToBuffer(faceMat);
+//
+//                // Inference
+//                byte[][] output = new byte[1][labels.size()];
+//                tflite.run(buffer, output);
+//
+//                // Xử lý kết quả
+//                int classId = getMaxIndex(output[0]);
+//                float confidence = output[0][classId];
+//                String label = (confidence > CONFIDENCE_THRESHOLD) ?
+//                        labels.get(classId) : "Unknown";
+//
+//                // Xử lý nếu là khuôn mặt "Loc"
+//                if (label.equals("Loc")) {
+//                    int faceCenterX = adjustedX  + adjustedWidth  / 2;
+//                    int imageCenterX = isLandscapeMode ? rotatedWidth / 2 : rotatedHeight / 2;
+//                    int deviation = faceCenterX - imageCenterX;
+//
+//                    String direction = "F";
+//                    if (deviation != 0) {
+//                        direction = deviation < 0 ? "L" : "R";
+//                    }
+//                    sendCommand(direction);
+//                }
+//                results.add(new FaceResult(
+//                        new Rect(adjustedX, adjustedY,
+//                                adjustedX + adjustedWidth,
+//                                adjustedY  + adjustedHeight),
+//                        label, confidence
+//                ));
+//            }
+//            // 7. Truyền đúng kích thước đã xoay cho overlay
+//            overlayView.setFaces(results, rotatedWidth, rotatedHeight);
+//        } catch (Exception e) {
+//            Log.e("FaceRecognition", "Analysis error", e);
+//        } finally {
+//            imageProxy.close();
+//        }
 //    }
+    //'F': Tiến
+    //'B': Lùi
+    //'L': Rẽ trái
+    //'R': Rẽ phải
+    //'S': Dừng
 
+    private void sendControlCommand(String direction, int ratio) {
+        String data = direction + (direction.equals("W") ? "" : ratio);
+       // Log.d("Control", "Sending command: " + data);
+
+        sendCommand(data);
+    }
+
+    private void sendCommand(String direction) {
+        if (arduinoController.isConnected()) {
+            arduinoController.sendControlCommand(direction);
+            addLogEntry("Đã gửi lệnh: " + direction);
+//            Log.d(TAG, "Đã gửi lệnh: " + direction);
+//            Toast.makeText(this, "Đã gửi lệnh: " + direction, Toast.LENGTH_SHORT).show();
+        } else {
+            addLogEntry("Chưa kết nối thiết bị. Lệnh: "+ direction);
+//            Log.d(TAG, "Chưa kết nối thiết bị. Lệnh: "+ direction);
+//            Toast.makeText(this, "Chưa kết nối thiết bị", Toast.LENGTH_SHORT).show();
+        }
+    }
 
     private Mat yuv420ToRgbMat(Image image) {
         // Lấy thông số ảnh
@@ -396,7 +593,7 @@ public class MainActivity extends AppCompatActivity {
         // Chuyển YUV → RGB
         rgbMat = new Mat();
         Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV21);
-
+        image.close();
         return rgbMat;
     }
 
@@ -454,10 +651,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         executor.shutdown();
-        unregisterReceiver(usbReceiver);
-        if (connectUsb != null) {
-            connectUsb.close();
-        }
+        arduinoController.release();
     }
 
     //xu ly sau khi duoc cap quyen
@@ -471,5 +665,20 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Cần cấp quyền camera", Toast.LENGTH_SHORT).show();
             }
         }
+    }
+
+    @Override
+    public void onConnectionStatusChange(String status) {
+        addLogEntry("status:" + status);
+    }
+
+    @Override
+    public void onDataReceived(String data) {
+        addLogEntry("data: " + data);
+    }
+
+    @Override
+    public void onConnectionError(String error) {
+        addLogEntry("con err" + error);
     }
 }
