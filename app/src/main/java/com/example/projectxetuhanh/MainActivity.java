@@ -21,6 +21,7 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Size;
 
+import android.view.View;
 import android.widget.ImageButton;
 import android.widget.Toast;
 
@@ -118,10 +119,24 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
             return insets;
         });
+        hideSystemUI();
+
         initView();
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
         initializeApp();
+    }
+
+    private void hideSystemUI() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+        );
     }
 
     private void initView() {
@@ -204,7 +219,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     private void loadModel() {
         try {
             // Load TFLite model
-            tflite = new Interpreter(loadModelFile("face_model_v8.tflite"));
+            tflite = new Interpreter(loadModelFile("face_model.tflite"));
 //            Interpreter.Options options = new Interpreter.Options();
 //            GpuDelegate delegate = new GpuDelegate();
 //            options.addDelegate(delegate);
@@ -299,9 +314,13 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             // 2. Chuyển ImageProxy -> RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
 
-            // 3. Xoay đúng chiều theo rotationDegrees
+            // 3. Xử lý xoay ảnh và tính toán tọa độ
             int rotation = imageProxy.getImageInfo().getRotationDegrees();
-            boolean isLandscapeMode = (rotation % 180 == 90);
+            boolean isLandscape = (rotation % 180 == 90);
+            int originalWidth = rgbMat.cols();
+            int originalHeight = rgbMat.rows();
+
+            // Xoay ảnh gốc
             switch (rotation) {
                 case 90:
                     Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
@@ -312,54 +331,48 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                 case 270:
                     Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_COUNTERCLOCKWISE);
                     break;
-                default:
-                    // 0 độ: không làm gì
             }
 
-            // 4. Tính kích thước sau khi xoay
-            int rotatedWidth  = rgbMat.cols();
+            // 4. Lấy kích thước sau xoay
+            int rotatedWidth = rgbMat.cols();
             int rotatedHeight = rgbMat.rows();
 
-            // 5. Phát hiện khuôn mặt trên ảnh đã xoay
+            // 5. Phát hiện khuôn mặt
             grayMat = new Mat();
             Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
             MatOfRect faces = new MatOfRect();
-            faceCascade.detectMultiScale(
-                    grayMat, faces,
-                    1.1, // scaleFactor (tăng để tăng tốc)
-                    3, // minNeighbors
-                    0, // flags
-                    new Size(100, 100), // minSize (lớn hơn để giảm số lượng kiểm tra)
-                    new Size(400, 400)  // maxSize
-            );
+            faceCascade.detectMultiScale(grayMat, faces, 1.1, 3, 0, new Size(100, 100), new Size(400, 400));
 
-            int adjustedX;
-            // 6. Xử lý từng face, build results như cũ...
+            // 6. Xử lý từng khuôn mặt
             List<FaceResult> results = new ArrayList<>();
             for (org.opencv.core.Rect rect : faces.toArray()) {
-                // Mirror tọa độ X nếu là camera trước
-//                adjustedX = (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
-//                        ? (rotatedWidth - rect.x - rect.width)  // Đảo ngược tọa độ X
-//                        : rect.x;
+                // Điều chỉnh tọa độ và kích thước theo hướng xoay
+                int adjustedX = rect.x;
+                int adjustedY = rect.y;
+                int adjustedWidth = rect.width;
+                int adjustedHeight = rect.height;
+
+                // Mirror cho camera trước
                 if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                    // Mirror tọa độ X dựa trên chế độ xoay
-                    if (isLandscapeMode) {
-                        adjustedX = rotatedWidth - rect.x - rect.width;
-                    } else {
-                        adjustedX = rotatedHeight - rect.x - rect.width;
-                    }
-                } else {
-                    adjustedX = rect.x;
+                    adjustedX = rotatedWidth - rect.x - rect.width;
                 }
 
-                // Tạo Rect mới với tọa độ đã điều chỉnh
+                // Hoán đổi width/height nếu ở chế độ ngang
+                if (isLandscape) {
+                    adjustedWidth = rect.height;
+                    adjustedHeight = rect.width;
+                    adjustedY = rotatedHeight - rect.y - rect.height; // Điều chỉnh tọa độ Y
+                }
+
+                // Tạo Rect đã điều chỉnh
                 org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
                         adjustedX,
-                        rect.y,
-                        rect.width,
-                        rect.height
+                        adjustedY,
+                        adjustedWidth,
+                        adjustedHeight
                 );
 
+                // ... Phần inference và xử lý nhãn
                 faceMat = preprocessFace(rgbMat.submat(adjustedRect));
                 ByteBuffer buffer = convertMatToBuffer(faceMat);
 
@@ -373,33 +386,155 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                 String label = (confidence > CONFIDENCE_THRESHOLD) ?
                         labels.get(classId) : "Unknown";
 
-                // Xử lý nếu là khuôn mặt "Loc"
+                // Xử lý hướng "Loc"
                 if (label.equals("Loc")) {
-                    int faceCenterX = adjustedRect.x + adjustedRect.width / 2;
-                    int imageCenterX = isLandscapeMode ? rotatedWidth / 2 : rotatedHeight / 2;
+                    int faceCenterX = adjustedX + adjustedWidth / 2;
+                    int imageCenterX = rotatedWidth / 2;
                     int deviation = faceCenterX - imageCenterX;
 
                     String direction = "F";
                     if (deviation != 0) {
-                        direction = deviation < 0 ? "L" : "R";
+                        direction = deviation < 0 ? "R" : "L";
                     }
                     sendCommand(direction);
                 }
+
                 results.add(new FaceResult(
-                        new Rect(adjustedRect.x, adjustedRect.y,
-                                adjustedRect.x + adjustedRect.width,
-                                adjustedRect.y + adjustedRect.height),
-                        label, confidence
+                        new Rect(adjustedX, adjustedY, adjustedX + adjustedWidth, adjustedY + adjustedHeight),
+                        label,
+                        confidence
                 ));
             }
-            // 7. Truyền đúng kích thước đã xoay cho overlay
+
+            // 7. Cập nhật overlay
             overlayView.setFaces(results, rotatedWidth, rotatedHeight);
         } catch (Exception e) {
-            Log.e("FaceRecognition", "Analysis error", e);
+            Log.e("FaceRecognition", "Error", e);
         } finally {
             imageProxy.close();
         }
     }
+
+//    @OptIn(markerClass = ExperimentalGetImage.class)
+//    private void analyzeImage(@NonNull ImageProxy imageProxy) {
+//        try {
+//            // 1. Skip frame
+//            if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
+//                imageProxy.close();
+//                return;
+//            }
+//
+//            // 2. Chuyển ImageProxy -> RGB Mat
+//            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
+//
+//            // 3. Xoay đúng chiều theo rotationDegrees
+//            int rotation = imageProxy.getImageInfo().getRotationDegrees();
+//            boolean isLandscapeMode = (rotation % 180 == 90);
+//            switch (rotation) {
+//                case 90:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
+//                    break;
+//                case 180:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_180);
+//                    break;
+//                case 270:
+//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_COUNTERCLOCKWISE);
+//                    break;
+//                default:
+//                    // 0 độ: không làm gì
+//            }
+//
+//            // 4. Tính kích thước sau khi xoay
+//            int rotatedWidth  = rgbMat.cols();
+//            int rotatedHeight = rgbMat.rows();
+//
+//            // 5. Phát hiện khuôn mặt trên ảnh đã xoay
+//            grayMat = new Mat();
+//            Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
+//            MatOfRect faces = new MatOfRect();
+//            faceCascade.detectMultiScale(
+//                    grayMat, faces,
+//                    1.1, // scaleFactor (tăng để tăng tốc)
+//                    3, // minNeighbors
+//                    0, // flags
+//                    new Size(100, 100), // minSize (lớn hơn để giảm số lượng kiểm tra)
+//                    new Size(400, 400)  // maxSize
+//            );
+//
+////            int adjustedX;
+//            // 6. Xử lý từng face, build results như cũ...
+//            List<FaceResult> results = new ArrayList<>();
+//            for (org.opencv.core.Rect rect : faces.toArray()) {
+//                // Mirror tọa độ X nếu là camera trước
+//                int adjustedX = rect.x;
+//                int adjustedY = rect.y;
+//                int adjustedWidth = rect.width;
+//                int adjustedHeight = rect.height;
+//                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+//                    // Mirror tọa độ X dựa trên chế độ xoay
+//                    if (isLandscapeMode) {
+//                        adjustedX = rotatedWidth - rect.x - rect.width;
+//                    } else {
+//                        adjustedX = rotatedHeight - rect.x - rect.width;
+//                    }
+//                } else {
+//                    adjustedX = rect.x;
+//                }
+//
+//                // Hoán đổi width/height nếu ảnh bị xoay 90/270 độ
+//                if (isLandscapeMode) {
+//                    adjustedWidth = rect.width;
+//                    adjustedHeight = rect.height;
+//                }
+//
+//                // Tạo Rect mới với tọa độ đã điều chỉnh
+//                org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
+//                        adjustedX,
+//                        adjustedY,
+//                        adjustedWidth,
+//                        adjustedHeight
+//                );
+//
+//                faceMat = preprocessFace(rgbMat.submat(adjustedRect));
+//                ByteBuffer buffer = convertMatToBuffer(faceMat);
+//
+//                // Inference
+//                byte[][] output = new byte[1][labels.size()];
+//                tflite.run(buffer, output);
+//
+//                // Xử lý kết quả
+//                int classId = getMaxIndex(output[0]);
+//                float confidence = output[0][classId];
+//                String label = (confidence > CONFIDENCE_THRESHOLD) ?
+//                        labels.get(classId) : "Unknown";
+//
+//                // Xử lý nếu là khuôn mặt "Loc"
+//                if (label.equals("Loc")) {
+//                    int faceCenterX = adjustedX  + adjustedWidth  / 2;
+//                    int imageCenterX = isLandscapeMode ? rotatedWidth / 2 : rotatedHeight / 2;
+//                    int deviation = faceCenterX - imageCenterX;
+//
+//                    String direction = "F";
+//                    if (deviation != 0) {
+//                        direction = deviation < 0 ? "L" : "R";
+//                    }
+//                    sendCommand(direction);
+//                }
+//                results.add(new FaceResult(
+//                        new Rect(adjustedX, adjustedY,
+//                                adjustedX + adjustedWidth,
+//                                adjustedY  + adjustedHeight),
+//                        label, confidence
+//                ));
+//            }
+//            // 7. Truyền đúng kích thước đã xoay cho overlay
+//            overlayView.setFaces(results, rotatedWidth, rotatedHeight);
+//        } catch (Exception e) {
+//            Log.e("FaceRecognition", "Analysis error", e);
+//        } finally {
+//            imageProxy.close();
+//        }
+//    }
     //'F': Tiến
     //'B': Lùi
     //'L': Rẽ trái

@@ -3,5 +3,10 @@
     <style name="Base.Theme.ProjectXeTuHanh" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <!-- Ẩn status bar -->
+        <item name="android:windowFullscreen">true</item>
+        <!-- Ẩn navigation bar (tuỳ thiết bị) -->
+        <item name="android:windowTranslucentNavigation">true</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 </resources>
