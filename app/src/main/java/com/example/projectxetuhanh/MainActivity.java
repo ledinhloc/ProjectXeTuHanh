@@ -204,7 +204,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     private void loadModel() {
         try {
             // Load TFLite model
-            tflite = new Interpreter(loadModelFile("face_model.tflite"));
+            tflite = new Interpreter(loadModelFile("face_model_v8.tflite"));
 //            Interpreter.Options options = new Interpreter.Options();
 //            GpuDelegate delegate = new GpuDelegate();
 //            options.addDelegate(delegate);
@@ -301,6 +301,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
 
             // 3. Xoay đúng chiều theo rotationDegrees
             int rotation = imageProxy.getImageInfo().getRotationDegrees();
+            boolean isLandscapeMode = (rotation % 180 == 90);
             switch (rotation) {
                 case 90:
                     Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
@@ -332,14 +333,24 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                     new Size(400, 400)  // maxSize
             );
 
+            int adjustedX;
             // 6. Xử lý từng face, build results như cũ...
             List<FaceResult> results = new ArrayList<>();
             for (org.opencv.core.Rect rect : faces.toArray()) {
-
                 // Mirror tọa độ X nếu là camera trước
-                int adjustedX = (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
-                        ? (rotatedWidth - rect.x - rect.width)  // Đảo ngược tọa độ X
-                        : rect.x;
+//                adjustedX = (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA)
+//                        ? (rotatedWidth - rect.x - rect.width)  // Đảo ngược tọa độ X
+//                        : rect.x;
+                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                    // Mirror tọa độ X dựa trên chế độ xoay
+                    if (isLandscapeMode) {
+                        adjustedX = rotatedWidth - rect.x - rect.width;
+                    } else {
+                        adjustedX = rotatedHeight - rect.x - rect.width;
+                    }
+                } else {
+                    adjustedX = rect.x;
+                }
 
                 // Tạo Rect mới với tọa độ đã điều chỉnh
                 org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
@@ -365,7 +376,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                 // Xử lý nếu là khuôn mặt "Loc"
                 if (label.equals("Loc")) {
                     int faceCenterX = adjustedRect.x + adjustedRect.width / 2;
-                    int imageCenterX = rotatedWidth / 2;
+                    int imageCenterX = isLandscapeMode ? rotatedWidth / 2 : rotatedHeight / 2;
                     int deviation = faceCenterX - imageCenterX;
 
                     String direction = "F";
@@ -375,7 +386,9 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                     sendCommand(direction);
                 }
                 results.add(new FaceResult(
-                        new Rect(adjustedRect.x, adjustedRect.y, adjustedRect.x + adjustedRect.width, adjustedRect.y + adjustedRect.height),
+                        new Rect(adjustedRect.x, adjustedRect.y,
+                                adjustedRect.x + adjustedRect.width,
+                                adjustedRect.y + adjustedRect.height),
                         label, confidence
                 ));
             }
