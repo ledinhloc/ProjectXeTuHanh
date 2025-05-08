@@ -122,7 +122,6 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         // Khởi tạo OpenCV
         OpenCVLoader.initLocal();
         initializeApp();
-
     }
 
     private void initView() {
@@ -164,15 +163,6 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             }
         });
 
-//        btnCar.setOnClickListener(v -> {
-//            if (arduinoController.isConnected()) {
-//                arduinoController.disconnect();
-//            } else {
-//                arduinoController.connect();
-//            }
-//            updateButtonState();
-//        });
-
         // Khởi tạo log console
         logRecyclerView = findViewById(R.id.logRecyclerView);
         logAdapter = new LogAdapter();
@@ -194,9 +184,6 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     }
 
     private void addLogEntry(String message) {
-//        String timestamp = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(new Date());
-//        String logEntry = timestamp + " - " + message;
-
         runOnUiThread(() -> {
             logAdapter.addLog(message);
             logRecyclerView.smoothScrollToPosition(logAdapter.getItemCount() - 1);
@@ -217,7 +204,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     private void loadModel() {
         try {
             // Load TFLite model
-            tflite = new Interpreter(loadModelFile("face_model.tflite"));
+            tflite = new Interpreter(loadModelFile("face_model_v6.tflite"));
 //            Interpreter.Options options = new Interpreter.Options();
 //            GpuDelegate delegate = new GpuDelegate();
 //            options.addDelegate(delegate);
