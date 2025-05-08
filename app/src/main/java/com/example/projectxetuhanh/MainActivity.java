@@ -339,12 +339,16 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                 ByteBuffer buffer = convertMatToBuffer(faceMat);
 
                 // Inference
-                byte[][] output = new byte[1][labels.size()];
+                float[][] output = new float[1][labels.size()];
                 tflite.run(buffer, output);
 
                 // Xử lý kết quả
-                int classId = getMaxIndex(output[0]);
-                float confidence = output[0][classId];
+                float[] predictions = output[0];
+                int classId = getMaxIndex(predictions);
+                float confidence = predictions[classId];
+
+//                int classId = getMaxIndex(output[0]);
+//                float confidence = output[0][classId];
                 String label = (confidence > CONFIDENCE_THRESHOLD) ?
                         labels.get(classId) : "Unknown";
 
@@ -455,38 +459,74 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         return rgbMat;
     }
 
+//    private Mat preprocessFace(Mat faceRoi) {
+//        Mat resized = new Mat();
+//        Imgproc.resize(faceRoi, resized, new Size(inputWidth, inputHeight));
+//
+//        // Đảm bảo định dạng uint8
+//        if (resized.type() != CvType.CV_8UC3) {
+//            resized.convertTo(resized, CvType.CV_8UC3);
+//        }
+//        return resized;
+//    }
+
     private Mat preprocessFace(Mat faceRoi) {
+        // 1) Resize về đúng kích thước model yêu cầu
         Mat resized = new Mat();
         Imgproc.resize(faceRoi, resized, new Size(inputWidth, inputHeight));
 
-        // Đảm bảo định dạng uint8
-        if (resized.type() != CvType.CV_8UC3) {
-            resized.convertTo(resized, CvType.CV_8UC3);
-        }
-        return resized;
+        // 2) Chuyển sang float32 và chia 255.0 để chuẩn hóa về [0,1]
+        Mat floatMat = new Mat();
+        resized.convertTo(floatMat, CvType.CV_32FC3, 1.0 / 255.0);
+
+        // 3) Nếu model train trên RGB, chuyển BGR→RGB
+        Imgproc.cvtColor(floatMat, floatMat, Imgproc.COLOR_BGR2RGB);
+
+        return floatMat;
     }
 
     // Sửa hàm convertMatToBuffer
-    private ByteBuffer convertMatToBuffer(Mat mat) {
-        // Đảm bảo Mat là UINT8
-        if (mat.type() != CvType.CV_8UC3) {
-            mat.convertTo(mat, CvType.CV_8UC3);
+//    private ByteBuffer convertMatToBuffer(Mat mat) {
+//        // Đảm bảo Mat là UINT8
+//        if (mat.type() != CvType.CV_8UC3) {
+//            mat.convertTo(mat, CvType.CV_8UC3);
+//        }
+//
+//        // Tạo buffer với kiểu UINT8
+//        imgBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
+//        imgBuffer.order(ByteOrder.nativeOrder());
+//
+//        // Điền dữ liệu byte (0-255)
+//        byte[] pixelData = new byte[(int) mat.total() * mat.channels()];
+//        mat.get(0, 0, pixelData);
+//        imgBuffer.put(pixelData);
+//        imgBuffer.rewind();
+//
+//        return imgBuffer;
+//    }
+
+    private ByteBuffer convertMatToBuffer(Mat floatMat) {
+        // Số byte = 4 bytes * H * W * 3 channels
+        int byteCount = 4 * inputWidth * inputHeight * inputChannels;
+        ByteBuffer fb = ByteBuffer.allocateDirect(byteCount);
+        fb.order(ByteOrder.nativeOrder());
+
+        float[] pixel = new float[inputChannels];
+        // Duyệt từng pixel và putFloat
+        for (int y = 0; y < inputHeight; y++) {
+            for (int x = 0; x < inputWidth; x++) {
+                floatMat.get(y, x, pixel);
+                // Nếu thứ tự kênh đã là RGB, giữ nguyên:
+                fb.putFloat(pixel[0]);
+                fb.putFloat(pixel[1]);
+                fb.putFloat(pixel[2]);
+            }
         }
-
-        // Tạo buffer với kiểu UINT8
-        imgBuffer = ByteBuffer.allocateDirect(inputWidth * inputHeight * 3);
-        imgBuffer.order(ByteOrder.nativeOrder());
-
-        // Điền dữ liệu byte (0-255)
-        byte[] pixelData = new byte[(int) mat.total() * mat.channels()];
-        mat.get(0, 0, pixelData);
-        imgBuffer.put(pixelData);
-        imgBuffer.rewind();
-
-        return imgBuffer;
+        fb.rewind();
+        return fb;
     }
 
-    private int getMaxIndex(byte[] array) {
+    private int getMaxIndex(float[] array) {
         int maxIndex = 0;
         for (int i = 1; i < array.length; i++) {
             if (array[i] > array[maxIndex]) maxIndex = i;
