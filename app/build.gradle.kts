@@ -58,4 +58,5 @@ dependencies {
     implementation(libs.camera.view.v130)
 //    implementation(libs.opencv.android)
     implementation(libs.tensorflow.lite.gpu)
+    implementation("com.github.mik3y:usb-serial-for-android:3.9.0")
 }

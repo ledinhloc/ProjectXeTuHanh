@@ -77,18 +77,3 @@ public class FaceOverlayView extends View {
         }
     }
 }
-//
-class FaceResult {
-    // vùng khuôn mặt
-    Rect rect;
-    //ten label
-    String label;
-    //mức độ chắc chắn
-    float confidence;
-
-    public FaceResult(Rect rect, String label, float confidence) {
-        this.rect = rect;
-        this.label = label;
-        this.confidence = confidence;
-    }
-}

@@ -35,6 +35,30 @@
             android:src="@drawable/iconcamera"
             android:contentDescription="Chuyển camera"
             app:tint="@android:color/white" />
+
+        <!-- Nút kết nối/ ngăt -->
+        <ImageButton
+            android:id="@+id/btnCar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_margin="16dp"
+            android:layout_gravity="top|start"
+            android:adjustViewBounds="true"
+            android:scaleType="centerInside"
+            android:background="@android:color/transparent"
+            android:src="@drawable/car"
+            app:tint="@android:color/white" />
+
+        <!-- Log Console -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/logRecyclerView"
+            android:layout_width="400dp"
+            android:layout_height="200dp"
+            android:layout_gravity="bottom|start"
+            android:layout_margin="8dp"
+            android:background="#80000000"
+            android:elevation="8dp"
+            android:padding="4dp"/>
     </FrameLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
