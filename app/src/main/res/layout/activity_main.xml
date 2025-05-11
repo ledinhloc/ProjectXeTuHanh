@@ -23,6 +23,7 @@
         android:id="@+id/overlay"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        app:scaleType="fitCenter"
         app:layout_constraintBottom_toBottomOf="@id/previewView"
         app:layout_constraintEnd_toEndOf="@id/previewView"
         app:layout_constraintStart_toStartOf="@id/previewView"
@@ -69,5 +70,84 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="1.0" />
+
+    <!-- Thêm LinearLayout chứa Spinner và nút Stop -->
+    <Spinner
+        android:id="@+id/spinnerMode"
+        android:layout_width="200dp"
+        android:layout_height="48dp"
+        android:layout_margin="16dp"
+        app:layout_constraintEnd_toStartOf="@id/btnSwitchCamera"
+        app:layout_constraintTop_toTopOf="parent"
+        android:background="@android:drawable/btn_dropdown"
+        android:spinnerMode="dropdown"
+        android:entries="@array/mode_options" />
+
+    <!-- Nút Stop -->
+    <ImageButton
+        android:id="@+id/btnStop"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:src="@drawable/stop"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnSwitchCamera"
+        android:layout_margin="16dp"
+        android:contentDescription="Stop"
+        android:scaleType="centerInside"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+    <!-- Nút Stop -->
+    <ImageButton
+        android:id="@+id/btnUp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:src="@drawable/arrow_up_solid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnStop"
+        android:layout_margin="16dp"
+        app:tint="@android:color/white"
+        android:scaleType="centerInside"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+    <ImageButton
+        android:id="@+id/btnDown"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:src="@drawable/arrow_down_solid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnUp"
+        android:layout_margin="16dp"
+        app:tint="@android:color/white"
+        android:scaleType="centerInside"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+    <ImageButton
+        android:id="@+id/btnRight"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:src="@drawable/arrow_right_solid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnDown"
+        android:layout_margin="16dp"
+        app:tint="@android:color/white"
+        android:scaleType="centerInside"
+        android:background="?attr/selectableItemBackgroundBorderless" />
+
+    <ImageButton
+        android:id="@+id/btnLeft"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="16dp"
+        android:src="@drawable/arrow_left_solid"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btnRight"
+        android:layout_margin="16dp"
+        app:tint="@android:color/white"
+        android:scaleType="centerInside"
+        android:background="?attr/selectableItemBackgroundBorderless" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
