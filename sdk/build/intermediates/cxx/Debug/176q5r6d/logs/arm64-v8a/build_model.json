@@ -8,9 +8,9 @@
     "triple": "aarch64-linux-android",
     "llvmTriple": "aarch64-none-linux-android"
   },
-  "cxxBuildFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\arm64-v8a",
-  "soFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
-  "soRepublishFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cmake\\debug\\obj\\arm64-v8a",
+  "cxxBuildFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\arm64-v8a",
+  "soFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
+  "soRepublishFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cmake\\debug\\obj\\arm64-v8a",
   "abiPlatformVersion": 21,
   "cmake": {
     "effectiveConfiguration": {
@@ -37,13 +37,13 @@
     ],
     "cmakeSettingsConfiguration": "android-gradle-plugin-predetermined-name",
     "module": {
-      "cxxFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\.cxx",
-      "intermediatesBaseFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates",
-      "intermediatesFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx",
+      "cxxFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\.cxx",
+      "intermediatesBaseFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates",
+      "intermediatesFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx",
       "gradleModulePathName": ":sdk",
-      "moduleRootFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk",
-      "moduleBuildFile": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build.gradle",
-      "makeFile": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\libcxx_helper\\CMakeLists.txt",
+      "moduleRootFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk",
+      "moduleBuildFile": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build.gradle",
+      "makeFile": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\libcxx_helper\\CMakeLists.txt",
       "buildSystem": "CMAKE",
       "ndkFolder": "C:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973",
       "ndkFolderBeforeSymLinking": "C:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973",
@@ -153,7 +153,7 @@
         "SYSTEM": {}
       },
       "project": {
-        "rootBuildGradleFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh",
+        "rootBuildGradleFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh",
         "sdkFolder": "C:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk",
         "isBuildOnlyTargetAbiEnabled": true,
         "ideBuildTargetAbi": "arm64-v8a,armeabi-v7a,armeabi",
@@ -173,12 +173,12 @@
   "buildSettings": {
     "environmentVariables": []
   },
-  "prefabFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\prefab\\arm64-v8a",
+  "prefabFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\prefab\\arm64-v8a",
   "isActiveAbi": true,
   "fullConfigurationHash": "176q5r6d3y4e6g4m5w101ot5m1z3l8391fk4jxa34t452dd4f504r1d2a",
   "fullConfigurationHashKey": "# Values used to calculate the hash in this folder name.\n# Should not depend on the absolute path of the project itself.\n#   - AGP: 8.7.3.\n#   - $NDK is the path to NDK 27.0.12077973.\n#   - $PROJECT is the path to the parent folder of the root Gradle build file.\n#   - $ABI is the ABI to be built with. The specific value doesn\u0027t contribute to the value of the hash.\n#   - $HASH is the hash value computed from this text.\n#   - $CMAKE is the path to CMake 3.22.1.\n#   - $NINJA is the path to Ninja.\n-H$PROJECT/sdk/libcxx_helper\n-DCMAKE_SYSTEM_NAME\u003dAndroid\n-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON\n-DCMAKE_SYSTEM_VERSION\u003d21\n-DANDROID_PLATFORM\u003dandroid-21\n-DANDROID_ABI\u003d$ABI\n-DCMAKE_ANDROID_ARCH_ABI\u003d$ABI\n-DANDROID_NDK\u003d$NDK\n-DCMAKE_ANDROID_NDK\u003d$NDK\n-DCMAKE_TOOLCHAIN_FILE\u003d$NDK/build/cmake/android.toolchain.cmake\n-DCMAKE_MAKE_PROGRAM\u003d$NINJA\n-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003d$PROJECT/sdk/build/intermediates/cxx/Debug/$HASH/obj/$ABI\n-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003d$PROJECT/sdk/build/intermediates/cxx/Debug/$HASH/obj/$ABI\n-DCMAKE_BUILD_TYPE\u003dDebug\n-B$PROJECT/sdk/.cxx/Debug/$HASH/$ABI\n-GNinja\n-DANDROID_STL\u003dc++_shared",
   "configurationArguments": [
-    "-HD:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\libcxx_helper",
+    "-HD:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\libcxx_helper",
     "-DCMAKE_SYSTEM_NAME\u003dAndroid",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS\u003dON",
     "-DCMAKE_SYSTEM_VERSION\u003d21",
@@ -189,13 +189,13 @@
     "-DCMAKE_ANDROID_NDK\u003dC:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973",
     "-DCMAKE_TOOLCHAIN_FILE\u003dC:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973\\build\\cmake\\android.toolchain.cmake",
     "-DCMAKE_MAKE_PROGRAM\u003dC:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\cmake\\3.22.1\\bin\\ninja.exe",
-    "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
-    "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
+    "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY\u003dD:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
+    "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY\u003dD:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d\\obj\\arm64-v8a",
     "-DCMAKE_BUILD_TYPE\u003dDebug",
-    "-BD:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\arm64-v8a",
+    "-BD:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\.cxx\\Debug\\176q5r6d\\arm64-v8a",
     "-GNinja",
     "-DANDROID_STL\u003dc++_shared"
   ],
   "stlLibraryFile": "C:\\Users\\ASUS TUF\\AppData\\Local\\Android\\Sdk\\ndk\\27.0.12077973\\toolchains\\llvm\\prebuilt\\windows-x86_64\\sysroot\\usr\\lib\\aarch64-linux-android\\libc++_shared.so",
-  "intermediatesParentFolder": "D:\\he_thong_nhung\\project_xe\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d"
+  "intermediatesParentFolder": "D:\\he_thong_nhung\\ProjectXeTuHanh\\sdk\\build\\intermediates\\cxx\\Debug\\176q5r6d"
 }
