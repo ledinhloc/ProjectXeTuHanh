@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">ProjectXeTuHanh</string>
+    <string-array name="mode_options">
+        <item>Theo người</item>
+        <item>Theo line + tránh vật cản</item>
+    </string-array>
 </resources>

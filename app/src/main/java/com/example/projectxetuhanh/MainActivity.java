@@ -22,7 +22,10 @@ import org.opencv.core.CvType;
 import org.opencv.core.Size;
 
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.ImageButton;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
@@ -96,7 +99,8 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
 
     private CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
     private ProcessCameraProvider cameraProvider;
-    ImageButton btnSwitch, btnCar ;
+    ImageButton btnSwitch, btnCar, btnStop ;
+    ImageButton btnDown, btnUp, btnRight, btnLeft;
     //bo qua khung hinh
     private AtomicInteger frameCount = new AtomicInteger(0);
     private static final int FRAME_SKIP_RATE = 3;
@@ -104,9 +108,11 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     private ArduinoUsbController arduinoController;
 
     private static final String TAG = "MainActivity";
+    private int currentMode = 1; // Thêm biến theo dõi mode hiện tại
 
     private LogAdapter logAdapter;
     private RecyclerView logRecyclerView;
+    Spinner spinnerMode;
 
     @RequiresApi(api = Build.VERSION_CODES.TIRAMISU)
     @Override
@@ -145,6 +151,13 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         overlayView = findViewById(R.id.overlay);
         btnSwitch = findViewById(R.id.btnSwitchCamera);
         btnCar = findViewById(R.id.btnCar);
+        spinnerMode = findViewById(R.id.spinnerMode);
+        btnStop = findViewById(R.id.btnStop);
+
+        btnUp = findViewById(R.id.btnUp);
+        btnDown = findViewById(R.id.btnDown);
+        btnRight = findViewById(R.id.btnRight);
+        btnLeft = findViewById(R.id.btnLeft);
 
         btnSwitch.setOnClickListener(v -> {
             // Đổi selector
@@ -183,19 +196,42 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         logAdapter = new LogAdapter();
         logRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         logRecyclerView.setAdapter(logAdapter);
-    }
 
-    // Phương thức mới
-    private void updateButtonState() {
-        runOnUiThread(() -> {
-            if (arduinoController.isConnected()) {
-                btnCar.setImageResource(R.drawable.carstart);
-                btnCar.setImageTintList(null);
-            } else {
-                btnCar.setImageResource(R.drawable.car);
-                btnCar.setImageTintList(ColorStateList.valueOf(Color.WHITE));
+        spinnerMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                String selectedMode = parent.getItemAtPosition(position).toString();
+                Toast.makeText(MainActivity.this, "Chọn: " + selectedMode, Toast.LENGTH_SHORT).show();
+                // Cập nhật mode hiện tại
+                if(position == 0){
+                    sendCommand("1");
+                    currentMode = 1; 
+                }
+                else{
+                    sendCommand("2");
+                    currentMode = 2; 
+                }
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
             }
         });
+
+        btnStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                sendCommand("0");
+                currentMode = 0;
+                Toast.makeText(MainActivity.this, "Đã chọn Stop", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        btnUp.setOnClickListener(view -> {sendCommand("F");});
+        btnDown.setOnClickListener(view -> {sendCommand("B");});
+        btnLeft.setOnClickListener(view -> {sendCommand("L");});
+        btnRight.setOnClickListener(view -> {sendCommand("R");});
     }
 
     private void addLogEntry(String message) {
@@ -220,11 +256,6 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         try {
             // Load TFLite model
             tflite = new Interpreter(loadModelFile("face_model.tflite"));
-//            Interpreter.Options options = new Interpreter.Options();
-//            GpuDelegate delegate = new GpuDelegate();
-//            options.addDelegate(delegate);
-//            tflite = new Interpreter(loadModelFile("face_model.tflite"), options);
-//            // Lấy thông số đầu vào
             Tensor inputTensor = tflite.getInputTensor(0);
             int[] inputShape = inputTensor.shape();
             inputWidth = inputShape[1];
@@ -305,6 +336,12 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     @OptIn(markerClass = ExperimentalGetImage.class)
     private void analyzeImage(@NonNull ImageProxy imageProxy) {
         try {
+            // Chỉ xử lý ảnh khi mode là 0 (Chạy theo người)
+            if (currentMode != 1) {
+                imageProxy.close();
+                return;
+            }
+
             // 1. Skip frame
             if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
                 imageProxy.close();
@@ -415,149 +452,12 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
         }
     }
 
-//    @OptIn(markerClass = ExperimentalGetImage.class)
-//    private void analyzeImage(@NonNull ImageProxy imageProxy) {
-//        try {
-//            // 1. Skip frame
-//            if (frameCount.getAndIncrement() % FRAME_SKIP_RATE != 0) {
-//                imageProxy.close();
-//                return;
-//            }
-//
-//            // 2. Chuyển ImageProxy -> RGB Mat
-//            rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
-//
-//            // 3. Xoay đúng chiều theo rotationDegrees
-//            int rotation = imageProxy.getImageInfo().getRotationDegrees();
-//            boolean isLandscapeMode = (rotation % 180 == 90);
-//            switch (rotation) {
-//                case 90:
-//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE);
-//                    break;
-//                case 180:
-//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_180);
-//                    break;
-//                case 270:
-//                    Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_COUNTERCLOCKWISE);
-//                    break;
-//                default:
-//                    // 0 độ: không làm gì
-//            }
-//
-//            // 4. Tính kích thước sau khi xoay
-//            int rotatedWidth  = rgbMat.cols();
-//            int rotatedHeight = rgbMat.rows();
-//
-//            // 5. Phát hiện khuôn mặt trên ảnh đã xoay
-//            grayMat = new Mat();
-//            Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
-//            MatOfRect faces = new MatOfRect();
-//            faceCascade.detectMultiScale(
-//                    grayMat, faces,
-//                    1.1, // scaleFactor (tăng để tăng tốc)
-//                    3, // minNeighbors
-//                    0, // flags
-//                    new Size(100, 100), // minSize (lớn hơn để giảm số lượng kiểm tra)
-//                    new Size(400, 400)  // maxSize
-//            );
-//
-////            int adjustedX;
-//            // 6. Xử lý từng face, build results như cũ...
-//            List<FaceResult> results = new ArrayList<>();
-//            for (org.opencv.core.Rect rect : faces.toArray()) {
-//                // Mirror tọa độ X nếu là camera trước
-//                int adjustedX = rect.x;
-//                int adjustedY = rect.y;
-//                int adjustedWidth = rect.width;
-//                int adjustedHeight = rect.height;
-//                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-//                    // Mirror tọa độ X dựa trên chế độ xoay
-//                    if (isLandscapeMode) {
-//                        adjustedX = rotatedWidth - rect.x - rect.width;
-//                    } else {
-//                        adjustedX = rotatedHeight - rect.x - rect.width;
-//                    }
-//                } else {
-//                    adjustedX = rect.x;
-//                }
-//
-//                // Hoán đổi width/height nếu ảnh bị xoay 90/270 độ
-//                if (isLandscapeMode) {
-//                    adjustedWidth = rect.width;
-//                    adjustedHeight = rect.height;
-//                }
-//
-//                // Tạo Rect mới với tọa độ đã điều chỉnh
-//                org.opencv.core.Rect adjustedRect = new org.opencv.core.Rect(
-//                        adjustedX,
-//                        adjustedY,
-//                        adjustedWidth,
-//                        adjustedHeight
-//                );
-//
-//                faceMat = preprocessFace(rgbMat.submat(adjustedRect));
-//                ByteBuffer buffer = convertMatToBuffer(faceMat);
-//
-//                // Inference
-//                byte[][] output = new byte[1][labels.size()];
-//                tflite.run(buffer, output);
-//
-//                // Xử lý kết quả
-//                int classId = getMaxIndex(output[0]);
-//                float confidence = output[0][classId];
-//                String label = (confidence > CONFIDENCE_THRESHOLD) ?
-//                        labels.get(classId) : "Unknown";
-//
-//                // Xử lý nếu là khuôn mặt "Loc"
-//                if (label.equals("Loc")) {
-//                    int faceCenterX = adjustedX  + adjustedWidth  / 2;
-//                    int imageCenterX = isLandscapeMode ? rotatedWidth / 2 : rotatedHeight / 2;
-//                    int deviation = faceCenterX - imageCenterX;
-//
-//                    String direction = "F";
-//                    if (deviation != 0) {
-//                        direction = deviation < 0 ? "L" : "R";
-//                    }
-//                    sendCommand(direction);
-//                }
-//                results.add(new FaceResult(
-//                        new Rect(adjustedX, adjustedY,
-//                                adjustedX + adjustedWidth,
-//                                adjustedY  + adjustedHeight),
-//                        label, confidence
-//                ));
-//            }
-//            // 7. Truyền đúng kích thước đã xoay cho overlay
-//            overlayView.setFaces(results, rotatedWidth, rotatedHeight);
-//        } catch (Exception e) {
-//            Log.e("FaceRecognition", "Analysis error", e);
-//        } finally {
-//            imageProxy.close();
-//        }
-//    }
-    //'F': Tiến
-    //'B': Lùi
-    //'L': Rẽ trái
-    //'R': Rẽ phải
-    //'S': Dừng
-
-    private void sendControlCommand(String direction, int ratio) {
-        String data = direction + (direction.equals("W") ? "" : ratio);
-       // Log.d("Control", "Sending command: " + data);
-
-        sendCommand(data);
-    }
-
     private void sendCommand(String direction) {
         if (arduinoController.isConnected()) {
             arduinoController.sendControlCommand(direction);
             addLogEntry("Đã gửi lệnh: " + direction);
-//            Log.d(TAG, "Đã gửi lệnh: " + direction);
-//            Toast.makeText(this, "Đã gửi lệnh: " + direction, Toast.LENGTH_SHORT).show();
         } else {
             addLogEntry("Chưa kết nối thiết bị. Lệnh: "+ direction);
-//            Log.d(TAG, "Chưa kết nối thiết bị. Lệnh: "+ direction);
-//            Toast.makeText(this, "Chưa kết nối thiết bị", Toast.LENGTH_SHORT).show();
         }
     }
 
