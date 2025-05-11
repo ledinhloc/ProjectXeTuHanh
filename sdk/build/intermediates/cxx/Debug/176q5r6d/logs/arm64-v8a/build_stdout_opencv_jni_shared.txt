@@ -1,0 +1,2 @@
+ninja: Entering directory `D:\he_thong_nhung\project_xe\ProjectXeTuHanh\sdk\.cxx\Debug\176q5r6d\arm64-v8a'
+ninja: no work to do.
