@@ -144,70 +144,126 @@ void handleManualControl(char cmd) {
   delay(500);  // Đợi 500ms trước khi thực hiện lệnh tiếp theo
 }
 
+// Quét trái – giữa – phải, trả về mảng 3 khoảng cách tương ứng
+void scanSides(int distOut[3]) {
+  const int angles[3] = {90, 45, 135};  // 90°: thẳng, 45°: trái, 135°: phải
+  for (int i = 0; i < 3; i++) {
+    myServo.write(angles[i]);
+    delay(300);  // chờ servo xoay ổn định
+
+    // đo khoảng cách
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    long dur = pulseIn(echoPin, HIGH, 30000);
+    if (dur == 0) distOut[i] = 999;
+    else distOut[i] = dur * 0.034 / 2;
+
+    Serial.print("Scan ");
+    Serial.print(angles[i]);
+    Serial.print("° = ");
+    Serial.print(distOut[i]);
+    Serial.println(" cm");
+  }
+  myServo.write(90);  // trả servo về giữa
+  delay(200);
+}
+
+// Hàm chính xử lý tránh chướng ngại
+void avoidObstacle() {
+  int dists[3];
+  scanSides(dists);          // dists[0]=giữa, [1]=trái, [2]=phải
+  int thoiGianQuay = 1000;
+  // Ưu tiên quay trái nếu trống
+  if (dists[1] > obstacleDistance) {
+    Serial.println("Quay TRÁI...");
+    pivotLeftInPlace(thoiGianQuay);
+  }
+  // Nếu trái chặn, thử phải
+  else if (dists[2] > obstacleDistance) {
+    Serial.println("Quay PHẢI...");
+    pivotRightInPlace(thoiGianQuay);
+  }
+  // Cả hai bên đều chặn → lùi và scan lại
+  else {
+    Serial.println("Hai bên đều chặn, lùi lại...");
+    moveBackward(baseSpeed);
+    delay(200);
+    // Có thể gọi đệ quy hoặc lập lại scan
+    scanSides(dists);
+    if (dists[1] > dists[2]) {
+      Serial.println("Chọn quay TRÁI sau lùi");
+      turnLeft()
+    } else {
+      Serial.println("Chọn quay PHẢI sau lùi");
+      turnRight();
+    }
+  }
+}
+
+const unsigned long CONTROL_PERIOD = 5;  // 5 ms ~ 200 Hz control loop
+unsigned long lastControlTime = 0;
 // Hàm xử lý chế độ tự động theo line
-void handleAutoMode() {
-  // Đọc giá trị từ 5 cảm biến line
+void mainChayTheoLine(){
+  unsigned long now = millis();
+  if (now - lastControlTime < CONTROL_PERIOD) {
+    // Ở những lúc không đến kỳ, ta có thể làm việc khác (nếu có)
+    // Nếu có vật cản quá gần → thì xoay trái, xoay phải nếu mà trống bên nào thì chạy bên đó, nếu bị chặn hết thì lui lại và tìm
+    int distance = readDistance();
+    if (distance < obstacleDistance) {
+      stopAllMotors();
+      Serial.println("VẬT CẢN TRƯỚC!");
+      delay(200);
+      avoidObstacle();
+      return;
+    }
+    return;
+  }
+  lastControlTime = now;
+
+  // 1) Đọc cảm biến line
   bool onBlack[5];
   int sensorSum = 0, weightedSum = 0;
-  for(int i=0; i<5; i++) {
+  for (int i = 0; i < 5; i++) {
     int raw = analogRead(sensorPins[i]);
     onBlack[i] = (raw < blackThreshold);
-    if(onBlack[i]) {
+    if (onBlack[i]) {
       sensorSum++;
-      weightedSum += (2 - i);  // Tính tổng có trọng số
+      weightedSum += (2 - i);
     }
   }
 
-  // Kiểm tra vật cản
-  float distance = readDistance();
-  if(distance < obstacleDistance) {
-    stopAllMotors();
-    delay(100);
-    moveBackward(baseSpeed);
-    delay(300);
-    turnRight();
-    delay(400);
-    return;
-  }
-
-  // Điều khiển động cơ dựa trên vị trí line
-  if(sensorSum > 0) {
-    float error = float(weightedSum)/sensorSum;
+  // 2) Tính PID/PD đơn giản (ở đây dùng tỷ lệ P)
+  int leftSpeed  = baseSpeed;
+  int rightSpeed = baseSpeed;
+  if (sensorSum > 0) {
+    float error = float(weightedSum) / sensorSum;
     float correction = error * turnFactor * baseSpeed;
-    int leftSpeed = constrain(baseSpeed - correction, 0, 255);
-    int rightSpeed = constrain(baseSpeed + correction, 0, 255);
-    
-    // Điều chỉnh tốc độ động cơ
-    motorLeftFront.setSpeed(leftSpeed);
-    motorLeftRear.setSpeed(leftSpeed);
-    motorRightFront.setSpeed(rightSpeed);
-    motorRightRear.setSpeed(rightSpeed);
-    
-    // Cho xe chạy
-    motorLeftFront.run(FORWARD);
-    motorLeftRear.run(FORWARD);
-    motorRightFront.run(FORWARD);
-    motorRightRear.run(FORWARD);
-  } else {
-    // Nếu mất line thì quay phải tìm line
-    turnRight();
+    // Lệch trái error>0 → giảm tốc trái, tăng phải
+    leftSpeed  = constrain(baseSpeed  - correction, 0, 255);
+    rightSpeed = constrain(baseSpeed  + correction, 0, 255);
   }
+  else {
+    // Mất vạch hoàn toàn: ví dụ quay tại chỗ tìm lại
+    leftSpeed  = baseSpeed / 3;
+    rightSpeed = baseSpeed*2;
+  }
+
+  // 3) Cập nhật motor
+  motorLeftFront.setSpeed(leftSpeed);
+  motorLeftRear .setSpeed(leftSpeed);
+  motorRightFront.setSpeed(rightSpeed);
+  motorRightRear .setSpeed(rightSpeed);
+
+  motorLeftFront.run(FORWARD);
+  motorLeftRear.run(FORWARD);
+  motorRightFront.run(FORWARD);
+  motorRightRear.run(FORWARD);
 }
 
-// Hàm xử lý chế độ điều khiển bằng tay
-void mainChayTheoNguoi(){
-  // Để trống vì đã xử lý trong handleManualControl
-}
-
-// Hàm xử lý chế độ tự động theo line
-void mainChayTheoLine(){
-  // Để trống vì đã xử lý trong handleAutoMode
-}
-
-// Hàm xử lý chế độ dừng
-void mainDung(){
-  stopAllMotors();
-}
 
 // Biến toàn cục cho chế độ và lệnh
 int command = 0;  // 0: dừng, 1: điều khiển bằng tay, 2: tự động theo line

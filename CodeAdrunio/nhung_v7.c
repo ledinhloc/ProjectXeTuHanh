@@ -110,14 +110,14 @@ void loop() {
 //   // Serial.print(distance);
 //   // Serial.println(" cm");
 
-//   // // Nếu có vật cản quá gần → thì xoay trái, xoay phải nếu mà trống bên nào thì chạy bên đó, nếu bị chặn hết thì lui lại và tìm
-//   // if (distance < obstacleDistance) {
-//   //   stopAll();
-//   //   Serial.println("VẬT CẢN TRƯỚC!");
-//   //   delay(200);
-//   //   avoidObstacle();
-//   //   return;
-//   // }
+  // // Nếu có vật cản quá gần → thì xoay trái, xoay phải nếu mà trống bên nào thì chạy bên đó, nếu bị chặn hết thì lui lại và tìm
+  // if (distance < obstacleDistance) {
+  //   stopAll();
+  //   Serial.println("VẬT CẢN TRƯỚC!");
+  //   delay(200);
+  //   avoidObstacle();
+  //   return;
+  // }
 
 //   // Đọc cảm biến line
 //   bool onBlack[5];
