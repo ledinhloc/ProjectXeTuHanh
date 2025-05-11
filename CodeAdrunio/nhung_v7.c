@@ -87,7 +87,6 @@ void loop() {
   motorRightRear.run(FORWARD);
 }
 
-
 // void loop() {
 //   // Đo khoảng cách từ cảm biến siêu âm
 //   long duration;

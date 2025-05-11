@@ -230,8 +230,8 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
 
         btnUp.setOnClickListener(view -> {sendCommand("F");});
         btnDown.setOnClickListener(view -> {sendCommand("B");});
-        btnLeft.setOnClickListener(view -> {sendCommand("L");});
-        btnRight.setOnClickListener(view -> {sendCommand("R");});
+        btnLeft.setOnClickListener(view -> {sendCommand("R");});
+        btnRight.setOnClickListener(view -> {sendCommand("L");});
     }
 
     private void addLogEntry(String message) {
