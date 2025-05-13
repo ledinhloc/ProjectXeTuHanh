@@ -362,6 +362,11 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             int originalWidth = rgbMat.cols();
             int originalHeight = rgbMat.rows();
 
+            // Mirror ảnh nếu là camera trước
+            if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                Core.flip(rgbMat, rgbMat, 1); // 1 means flip horizontally
+            }
+
             // Xoay ảnh gốc
             switch (rotation) {
                 case 90:
@@ -393,11 +398,6 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                 int adjustedY = rect.y;
                 int adjustedWidth = rect.width;
                 int adjustedHeight = rect.height;
-
-                // Mirror cho camera trước
-                if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                    adjustedX = rotatedWidth - rect.x - rect.width;
-                }
 
                 // Hoán đổi width/height nếu ở chế độ ngang
                 if (isLandscape) {
