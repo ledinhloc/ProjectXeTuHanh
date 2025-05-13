@@ -356,16 +356,16 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             // 2. Chuyển ImageProxy -> RGB Mat
             rgbMat = yuv420ToRgbMat(Objects.requireNonNull(imageProxy.getImage()));
 
+            // Mirror ảnh nếu là camera trước
+            if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                Core.flip(rgbMat, rgbMat, 1);
+            }
+
             // 3. Xử lý xoay ảnh và tính toán tọa độ
             int rotation = imageProxy.getImageInfo().getRotationDegrees();
             boolean isLandscape = (rotation % 180 == 90);
             int originalWidth = rgbMat.cols();
             int originalHeight = rgbMat.rows();
-
-            // Mirror ảnh nếu là camera trước
-            if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
-                Core.flip(rgbMat, rgbMat, 1); // 1 means flip horizontally
-            }
 
             // Xoay ảnh gốc
             switch (rotation) {
@@ -436,7 +436,11 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
 
                     String direction = "F";
                     if (deviation != 0) {
-                        direction = deviation < 0 ? "R" : "L";
+                        if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                            direction = deviation < 0 ? "R" : "L";
+                        } else {
+                            direction = deviation < 0 ? "R" : "L";
+                        }
                     }
                     sendCommand(direction);
                 }
