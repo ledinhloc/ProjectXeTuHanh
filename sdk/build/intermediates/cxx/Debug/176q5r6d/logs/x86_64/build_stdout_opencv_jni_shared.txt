@@ -1,2 +1,2 @@
-ninja: Entering directory `D:\he_thong_nhung\project_xe\ProjectXeTuHanh\sdk\.cxx\Debug\176q5r6d\x86_64'
+ninja: Entering directory `D:\he_thong_nhung\ProjectXeTuHanh\sdk\.cxx\Debug\176q5r6d\x86_64'
 ninja: no work to do.

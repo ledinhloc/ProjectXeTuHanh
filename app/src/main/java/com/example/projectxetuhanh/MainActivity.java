@@ -103,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
     ImageButton btnDown, btnUp, btnRight, btnLeft;
     //bo qua khung hinh
     private AtomicInteger frameCount = new AtomicInteger(0);
-    private static final int FRAME_SKIP_RATE = 3;
+    private static final int FRAME_SKIP_RATE = 4;
 
     private ArduinoUsbController arduinoController;
 
@@ -207,9 +207,13 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                     sendCommand("1");
                     currentMode = 1; 
                 }
-                else{
+                else if(position == 1){
                     sendCommand("2");
                     currentMode = 2; 
+                }
+                else {
+                    sendCommand("0");
+                    currentMode = 0;
                 }
             }
 
@@ -224,6 +228,7 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             public void onClick(View view) {
                 sendCommand("0");
                 currentMode = 0;
+                spinnerMode.setSelection(2);// chuyen sang item Dung
                 Toast.makeText(MainActivity.this, "Đã chọn Stop", Toast.LENGTH_SHORT).show();
             }
         });

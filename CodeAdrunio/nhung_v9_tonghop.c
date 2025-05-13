@@ -20,6 +20,7 @@ const int blackThreshold = 422;
 // echoPin: Chân nhận tín hiệu phản hồi
 const int trigPin = 13;
 const int echoPin = 11;
+const int buzzerPin = 9;  // Chân kết nối còi
 Servo myServo; // Servo để quay cảm biến siêu âm
 
 // Các thông số điều chỉnh tốc độ và góc quay
@@ -38,6 +39,11 @@ char lastReceivedCommand = 'S';    // Lệnh nhận được cuối cùng
 const unsigned long DEBOUNCE_DELAY = 50;    // Thời gian chống nhiễu (ms)
 const unsigned long CONTROL_PERIOD = 5;     // 5 ms ~ 200 Hz control loop
 unsigned long lastControlTime = 0;
+unsigned long lastLoopTime = 0;    // Thời điểm thực hiện loop cuối
+const unsigned long LOOP_PERIOD = 20;       // 20ms ~ 50Hz loop frequency
+
+char incoming;  // Biến lưu lệnh nhận từ Serial
+int command = 0; // Biến lưu lệnh điều khiển
 
 // Khai báo các hàm
 void setup();
@@ -53,6 +59,7 @@ void mainChayTheoLine();
 float readDistance();
 void scanSides(int distOut[3]);
 void avoidObstacle();
+void beepBuzzer();
 
 // Hàm khởi tạo
 void setup() {
@@ -62,6 +69,7 @@ void setup() {
   // Cấu hình chân cảm biến siêu âm
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
+  pinMode(buzzerPin, OUTPUT);  // Cấu hình chân còi là OUTPUT
   
   // Khởi tạo servo và đặt vị trí giữa
   myServo.attach(9);
@@ -69,45 +77,59 @@ void setup() {
   delay(500); 
 }
 
+// Hàm báo động bằng còi
+void beepBuzzer() {
+  digitalWrite(buzzerPin, HIGH);  // Bật còi
+  delay(100);                     // Kêu 100ms
+  digitalWrite(buzzerPin, LOW);   // Tắt còi
+  delay(100);                     // Đợi 100ms
+  digitalWrite(buzzerPin, HIGH);  // Bật còi lần 2
+  delay(100);                     // Kêu 100ms
+  digitalWrite(buzzerPin, LOW);   // Tắt còi
+}
+
 // Hàm chính chạy liên tục
 void loop() {
-  // Đọc lệnh từ Serial
-  if(Serial.available() > 0) {
-    incoming = Serial.read();
+  unsigned long currentTime = millis();
+  
+  // Kiểm tra thời gian giữa các lần thực hiện loop
+  if (currentTime - lastLoopTime >= LOOP_PERIOD) {
+    lastLoopTime = currentTime;
     
-    // Bỏ qua ký tự xuống dòng và nhiễu
-    if (incoming == '\n' || incoming == '\r') return;
+    // Đọc lệnh từ Serial
+    if(Serial.available() > 0) {
+      incoming = Serial.read();
+      
+      // Bỏ qua ký tự xuống dòng và nhiễu
+      if (incoming == '\n' || incoming == '\r') return;
 
-    // Xử lý lệnh chế độ
-    switch(incoming) {
-      case '1': 
-        command = 1;  // Chuyển sang chế độ điều khiển bằng tay
-        handleManualControl(incoming);
-        break;
-      case '2': 
-        command = 2;  // Chuyển sang chế độ tự động theo line
-        mainChayTheoLine();
-        break;
-      case '0': 
-        command = 0;  // Chuyển sang chế độ dừng
-        stopAllMotors();
-        break;
-      default:
-        lastCommandTime = millis();
-        if(command == 1) {
-          // Xử lý lệnh điều khiển trong chế độ thủ công
-          handleManualControl(incoming);
-        }
-        break;
+      // Xử lý lệnh chế độ
+      switch(incoming) {
+        case '1': 
+          command = 1;  // Chuyển sang chế độ điều khiển bằng tay
+          break;
+        case '2': 
+          command = 2;  // Chuyển sang chế độ tự động theo line
+          break;
+        case '0': 
+          command = 0;  // Chuyển sang chế độ dừng
+          stopAllMotors();
+          break;
+        default:
+          lastCommandTime = currentTime;
+          if(command == 1) {
+            // Xử lý lệnh điều khiển trong chế độ thủ công
+            handleManualControl(incoming);
+          }
+          break;
+      }
+    }
+    
+    // Xử lý chế độ tự động theo line
+    if(command == 2) {
+      mainChayTheoLine();
     }
   }
-  
-  // Tự động dừng sau timeout
-  if (millis() - lastCommandTime > COMMAND_TIMEOUT) {
-    stopAllMotors();
-    lastReceivedCommand = 'S';
-  }
-  delay(50);  // Đợi 50ms trước vòng lặp tiếp theo
 }
 
 // Hàm dừng tất cả động cơ
@@ -247,30 +269,38 @@ void avoidObstacle() {
 void handleManualControl(char cmd) {
   // Xử lý các lệnh điều khiển
   switch(cmd) {
-    case 'F': moveForward(baseSpeed); break;  // Tiến
-    case 'B': moveBackward(baseSpeed); break; // Lùi
-    case 'L': turnLeft(); break;              // Rẽ trái
-    case 'R': turnRight(); break;             // Rẽ phải
-    case 'S': stopAllMotors(); break;         // Dừng
+    case 'F': 
+      moveForward(baseSpeed); 
+      break;  // Tiến với tốc độ cơ bản
+    case 'B': 
+      moveBackward(baseSpeed); 
+      break; // Lùi với tốc độ cơ bản
+    case 'L': 
+      turnLeft(); 
+      break;              // Rẽ trái với tốc độ xoay
+    case 'R': 
+      turnRight(); 
+      break;             // Rẽ phải với tốc độ xoay
+    case 'S': 
+      stopAllMotors(); 
+      break;         // Dừng
   }
-  delay(500);  // Đợi 500ms trước khi thực hiện lệnh tiếp theo
 }
 
 // Hàm xử lý chế độ tự động theo line
 void mainChayTheoLine() {
   unsigned long now = millis();
   if (now - lastControlTime < CONTROL_PERIOD) {
-    // Ở những lúc không đến kỳ, ta có thể làm việc khác (nếu có)
     // Nếu có vật cản quá gần → thì xoay trái, xoay phải nếu mà trống bên nào thì chạy bên đó, nếu bị chặn hết thì lui lại và tìm
     int distance = readDistance();
     if (distance < obstacleDistance) {
       stopAllMotors();
       Serial.println("VẬT CẢN TRƯỚC!");
+      beepBuzzer();  // Báo động khi phát hiện vật cản
       delay(200);
       avoidObstacle();
       return;
     }
-    return;
   }
   lastControlTime = now;
 
