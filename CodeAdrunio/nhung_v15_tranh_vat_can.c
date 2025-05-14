@@ -19,7 +19,7 @@ const int echoPin = 2;
 Servo myServo; // Servo để quay cảm biến siêu âm
 
 // Các thông số điều chỉnh tốc độ và góc quay
-const int baseSpeed = 90;        // Tốc độ cơ bản của động cơ
+const int baseSpeed = 180;        // Tốc độ cơ bản của động cơ
 const float turnFactor = 1.2;     // Hệ số điều chỉnh khi rẽ
 const int obstacleDistance = 15;  // Khoảng cách phát hiện vật cản (cm)
 const int tocDoXoay = baseSpeed*1.5; // Tốc độ khi xoay
@@ -90,41 +90,113 @@ void setup() {
 
 // Hàm chính chạy liên tục
 void loop() {
-  checkLight();           // Kiểm tra ánh sáng và điều khiển đèn
-  // mainChayTheoLine();
+  // checkLight();           // Kiểm tra ánh sáng và điều khiển đèn
+  mainChayTheoLine();
   
-  // Đọc lệnh từ Serial
-  if(Serial.available() > 0) {
-    incoming = Serial.read();
+  // // Đọc lệnh từ Serial
+  // if(Serial.available() > 0) {
+  //   incoming = Serial.read();
     
-    // Bỏ qua ký tự xuống dòng và nhiễu
-    if (incoming == '\n' || incoming == '\r') return;
+  //   // Bỏ qua ký tự xuống dòng và nhiễu
+  //   if (incoming == '\n' || incoming == '\r') return;
 
-    // Xử lý lệnh chế độ
-    switch(incoming) {
-      case '1': 
-        command = 1;  // Chuyển sang chế độ điều khiển bằng tay
-        break;
-      case '2': 
-        command = 2;  // Chuyển sang chế độ tự động theo line
-        break;
-      case '0': 
-        command = 0;  // Chuyển sang chế độ dừng
-        stopAllMotors();
-        break;
-      default:
-        lastCommandTime = currentTime;
-        if(command == 1) {
-          // Xử lý lệnh điều khiển trong chế độ thủ công
-          handleManualControl(incoming);
-        }
-        break;
+  //   // Xử lý lệnh chế độ
+  //   switch(incoming) {
+  //     case '1': 
+  //       command = 1;  // Chuyển sang chế độ điều khiển bằng tay
+  //       break;
+  //     case '2': 
+  //       command = 2;  // Chuyển sang chế độ tự động theo line
+  //       break;
+  //     case '0': 
+  //       command = 0;  // Chuyển sang chế độ dừng
+  //       stopAllMotors();
+  //       break;
+  //     default:
+  //       lastCommandTime = currentTime;
+  //       if(command == 1) {
+  //         // Xử lý lệnh điều khiển trong chế độ thủ công
+  //         handleManualControl(incoming);
+  //       }
+  //       break;
+  //   }
+  // }
+  
+  // // Xử lý chế độ tự động theo line
+  // if(command == 2) {
+  //   mainChayTheoLine();
+  // }
+}
+
+
+
+int turnSpeed = int(baseSpeed * 0.6);
+
+// Hàm xử lý chế độ tự động theo line
+void mainChayTheoLine() {
+  unsigned long now = millis();
+
+  // // 1) Kiểm tra vật cản mỗi DISTANCE_CHECK_INTERVAL
+  // if (now - lastDistanceCheck >= DISTANCE_CHECK_INTERVAL) {
+  //   lastDistanceCheck = now;
+    
+  //   // Đọc khoảng cách từ cảm biến siêu âm
+  //   float distance = readDistance();
+    
+  //   // Nếu phát hiện vật cản
+  //   if (distance < obstacleDistance) {
+  //     stopAllMotors();
+  //     delay(200);
+  //     avoidObstacle();
+  //     lastControlTime = millis();
+  //     return;
+  //   }
+  // }
+
+  // 2) Vòng điều khiển PID theo line
+  if (now - lastControlTime < CONTROL_PERIOD) {
+    return;
+  }
+  lastControlTime = now;
+
+  // 1) Đọc cảm biến line
+  bool onBlack[5];
+  int sensorSum = 0, weightedSum = 0;
+  for (int i = 0; i < 5; i++) {
+    int raw = analogRead(sensorPins[i]);
+    onBlack[i] = (raw < blackThreshold);
+    if (onBlack[i]) {
+      sensorSum++;
+      weightedSum += (2 - i);
     }
   }
-  
-  // Xử lý chế độ tự động theo line
-  if(command == 2) {
-    mainChayTheoLine();
+
+  // 2) Điều khiển motor dựa trên vị trí line
+  if (sensorSum > 0) {
+    float error = float(weightedSum) / sensorSum;
+    
+    // Nếu lệch trái (error > 0)
+    if (error > 0) {
+      turnLeft(turnSpeed);  // Sử dụng hàm turnLeft với tốc độ baseSpeed
+      lastTurnDirection = 'L';
+    }
+    // Nếu lệch phải (error < 0)
+    else if (error < 0) {
+      turnRight(turnSpeed);  // Sử dụng hàm turnRight với tốc độ baseSpeed
+      lastTurnDirection = 'R';
+    }
+    // Nếu đi thẳng (error = 0)
+    else {
+      moveForward(baseSpeed);  // Sử dụng hàm moveForward với tốc độ baseSpeed
+    }
+  }
+  else {
+    // Mất vạch: rẽ theo hướng cuối cùng đã lưu
+    if (lastTurnDirection == 'L') {
+      turnLeft(turnSpeed);  // Sử dụng hàm turnLeft với tốc độ baseSpeed
+    } else {
+      turnRight(turnSpeed);  // Sử dụng hàm turnRight với tốc độ baseSpeed
+    }
   }
 }
 
@@ -334,74 +406,6 @@ void handleManualControl(char cmd) {
     case 'S': 
       stopAllMotors(); 
       break;         // Dừng
-  }
-}
-
-// Hàm xử lý chế độ tự động theo line
-void mainChayTheoLine() {
-  unsigned long now = millis();
-
-  // 1) Kiểm tra vật cản mỗi DISTANCE_CHECK_INTERVAL
-  if (now - lastDistanceCheck >= DISTANCE_CHECK_INTERVAL) {
-    lastDistanceCheck = now;
-    
-    // Đọc khoảng cách từ cảm biến siêu âm
-    float distance = readDistance();
-    
-    // Nếu phát hiện vật cản
-    if (distance < obstacleDistance) {
-      stopAllMotors();
-      delay(200);
-      avoidObstacle();
-      lastControlTime = millis();
-      return;
-    }
-  }
-
-  // 2) Vòng điều khiển PID theo line
-  if (now - lastControlTime < CONTROL_PERIOD) {
-    return;
-  }
-  lastControlTime = now;
-
-  // 1) Đọc cảm biến line
-  bool onBlack[5];
-  int sensorSum = 0, weightedSum = 0;
-  for (int i = 0; i < 5; i++) {
-    int raw = analogRead(sensorPins[i]);
-    onBlack[i] = (raw < blackThreshold);
-    if (onBlack[i]) {
-      sensorSum++;
-      weightedSum += (2 - i);
-    }
-  }
-
-  // 2) Điều khiển motor dựa trên vị trí line
-  if (sensorSum > 0) {
-    float error = float(weightedSum) / sensorSum;
-    
-    // Nếu lệch trái (error > 0)
-    if (error > 0) {
-      turnLeft(baseSpeed);  // Sử dụng hàm turnLeft với tốc độ baseSpeed
-      lastTurnDirection = 'L';
-    }
-    // Nếu lệch phải (error < 0)
-    else if (error < 0) {
-      turnRight(baseSpeed);  // Sử dụng hàm turnRight với tốc độ baseSpeed
-      lastTurnDirection = 'R';
-    }
-    // Nếu đi thẳng (error = 0)
-    else {
-      moveForward(baseSpeed);  // Sử dụng hàm moveForward với tốc độ baseSpeed
-    }
-  }
-  else {
-    // Mất vạch: rẽ theo hướng cuối cùng đã lưu
-    if (lastTurnDirection == 'L') {
-      turnLeft(baseSpeed);  // Sử dụng hàm turnLeft với tốc độ baseSpeed
-    } else {
-      turnRight(baseSpeed);  // Sử dụng hàm turnRight với tốc độ baseSpeed
-    }
   }
 }
 
