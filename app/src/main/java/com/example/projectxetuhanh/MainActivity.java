@@ -79,7 +79,6 @@ import org.tensorflow.lite.gpu.GpuDelegate;
 
 import android.graphics.Rect;
 
-
 public class MainActivity extends AppCompatActivity implements ArduinoUsbController.ConnectionCallback {
     private PreviewView previewView;
     private FaceOverlayView overlayView;
@@ -388,7 +387,9 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
             grayMat = new Mat();
             Imgproc.cvtColor(rgbMat, grayMat, Imgproc.COLOR_RGB2GRAY);
             MatOfRect faces = new MatOfRect();
-            faceCascade.detectMultiScale(grayMat, faces, 1.1, 3, 0, new Size(100, 100), new Size(400, 400));
+            //faceCascade.detectMultiScale(grayMat, faces, 1.1, 5, 0, new Size(30, 30), new Size());
+             
+            faceCascade.detectMultiScale(grayMat, faces, 1.05, 4, 0, new Size(20, 20), new Size());
 
             // 6. Xử lý từng khuôn mặt
             List<FaceResult> results = new ArrayList<>();
