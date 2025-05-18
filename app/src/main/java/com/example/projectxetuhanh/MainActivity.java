@@ -435,16 +435,27 @@ public class MainActivity extends AppCompatActivity implements ArduinoUsbControl
                     int imageCenterX = rotatedWidth / 2;
                     int deviation = faceCenterX - imageCenterX;
 
-                    String direction = "F";
-                    if (deviation != 0) {
+                    // Ngưỡng 10% màn hình
+                    int threshold = (int) (rotatedWidth * 0.17);
+
+                    String direction;
+                    if (Math.abs(deviation) <= threshold) {
+                        // Nếu lệch chưa quá 10% thì đi thẳng
+                        direction = "F";
+                    } else {
+                        // Nếu lệch quá 10% mới xoay
                         if (cameraSelector == CameraSelector.DEFAULT_FRONT_CAMERA) {
+                            // Với camera trước, lệch trái (deviation<0) => quay phải
                             direction = deviation < 0 ? "R" : "L";
                         } else {
+                            // Với camera sau (hoặc các trường hợp khác) tương tự
                             direction = deviation < 0 ? "R" : "L";
                         }
                     }
+
                     sendCommand(direction);
                 }
+
 
                 results.add(new FaceResult(
                         new Rect(adjustedX, adjustedY, adjustedX + adjustedWidth, adjustedY + adjustedHeight),
